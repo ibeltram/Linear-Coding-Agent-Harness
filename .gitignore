@@ -4,6 +4,7 @@ generations/
 # Log files
 logs/
 
+# Environment (use .env.example as template)
 .env
-venv
+
 __pycache__

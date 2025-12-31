@@ -29,6 +29,7 @@ ALLOWED_COMMANDS = {
     # Node.js development
     "npm",
     "node",
+    "npx",
     # Version control
     "git",
     # Process management
@@ -36,6 +37,10 @@ ALLOWED_COMMANDS = {
     "lsof",
     "sleep",
     "pkill",  # For killing dev servers; validated separately
+    # Shell builtins (needed for || true patterns and output)
+    "true",
+    "false",
+    "echo",
     # Script execution
     "init.sh",  # Init scripts; validated separately
 }
