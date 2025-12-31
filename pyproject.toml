@@ -1,0 +1,12 @@
+[project]
+name = "linear-coding-agent-harness"
+version = "0.1.0"
+description = "Autonomous coding agent harness with Linear integration"
+requires-python = ">=3.10"
+dependencies = [
+    "claude-code-sdk>=0.0.25",
+    "python-dotenv>=1.0.0",
+]
+
+[tool.uv]
+dev-dependencies = []

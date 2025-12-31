@@ -1,681 +1,856 @@
-<project_specification>
-  <project_name>Claude.ai Clone - AI Chat Interface</project_name>
+<project_specification version="1.0">
+  <project_name>CodeArena</project_name>
 
   <overview>
-    Build a fully functional clone of claude.ai, Anthropic's conversational AI interface. The application should
-    provide a clean, modern chat interface for interacting with Claude via the API, including features like
-    conversation management, artifact rendering, project organization, multiple model selection, and advanced
-    settings. The UI should closely match claude.ai's design using Tailwind CSS with a focus on excellent
-    user experience and responsive design.
+    Build a fully functional, production-ready competitive platform where builders accept timed challenges,
+    work in their own workflows/IDEs, submit final outputs (repo/zip), and are judged via deterministic
+    automation + rubric + optional AI judge. The platform includes:
+      (1) a VS Code extension that is strictly non-invasive (matchmaking + timer + submission only),
+      (2) a web app for discovery, profiles, rankings, match detail pages, artifacts/diffs, wallet/credits,
+          tournaments, prize pools, disputes, and admin/moderation,
+      (3) backend services for identity, matchmaking, submission ingestion, judging sandbox, scoring, credits
+          ledger, rankings, tournaments, and operations/observability.
+
+    Credits are utility-only (non-withdrawable). Credits can be bought and won. Credits have real value by
+    being redeemable for platform automation services that subscription chat products do not cover:
+      - batch runs, multi-model comparisons, evaluation pipelines, CI checks, agent jobs.
+    Real-money value is delivered through scheduled prize pools and sponsored tournaments (event-based payouts),
+    not open-ended “credit cash-out”.
   </overview>
 
+  <high_level_goals>
+    <goal>Let users compete without changing their workflow.</goal>
+    <goal>Judging must be transparent, reproducible, and trusted.</goal>
+    <goal>Economic integrity: staking and settlement must be audit-grade.</goal>
+    <goal>Non-invasive extension: explicit actions only, clear upload previews.</goal>
+    <goal>Production readiness: security, privacy, scalability, observability, support tooling.</goal>
+  </high_level_goals>
+
+  <non_goals>
+    <non_goal>Build a custom IDE or intercept traffic from other AI tools.</non_goal>
+    <non_goal>Provide always-available conversion of credits to fiat/crypto.</non_goal>
+    <non_goal>Promise parity with any chat subscription product UI.</non_goal>
+  </non_goals>
+
+  <glossary>
+    <term name="Challenge">A task definition with requirements, constraints, rubric, and (optional) template.</term>
+    <term name="Challenge Version">An immutable published version of a challenge; matches always reference one version.</term>
+    <term name="Match">A competition instance between participants on a challenge version within a time limit.</term>
+    <term name="Submission">A delivered artifact (zip or repo+commit) for a match participant.</term>
+    <term name="Artifact">A normalized, content-addressed snapshot stored immutably for judging and viewing.</term>
+    <term name="Rubric">Scoring criteria per requirement; includes weights and evidence expectations.</term>
+    <term name="Judging Run">A sandbox execution of checks/tests/rubric/AI-judge producing scores and logs.</term>
+    <term name="Credits">Utility-only platform balance used for staking and redeeming automation services.</term>
+    <term name="Prize Pool">Event-based rewards (cash/crypto/hardware/SaaS bundles) for tournaments or sponsored events.</term>
+  </glossary>
+
+  <design_principles>
+    <trust_and_non_invasiveness>
+      - The extension never intercepts network requests, never monitors unrelated activity, and never scans outside
+        the user-selected workspace root.
+      - All sensitive actions are explicit (Join Match, Submit, Lock).
+      - The user sees a file manifest preview before upload.
+    </trust_and_non_invasiveness>
+
+    <fairness_and_reproducibility>
+      - Server-authoritative timers and deadlines.
+      - Immutable artifacts: content-hash + manifest; submissions lock at or before deadline.
+      - Judging inputs: challenge version + pinned runner image + artifact hash -> reproducible results.
+      - Deterministic tie-breakers defined per challenge category.
+    </fairness_and_reproducibility>
+
+    <economic_integrity>
+      - Double-entry ledger with holds/reserves; idempotent settlement.
+      - Credits are non-withdrawable; prizes are event-based claims.
+      - Anti-abuse: stake caps by rank, repeat-opponent throttling, collusion heuristics.
+    </economic_integrity>
+
+    <operational_excellence>
+      - Observability from day 1: logs/metrics/traces.
+      - Admin tooling for disputes, moderation, and re-judging.
+      - Clear runbooks and SLOs for match and judging reliability.
+    </operational_excellence>
+  </design_principles>
+
   <technology_stack>
-    <api_key>
-        You can use an API key located at /tmp/api-key for testing. You will not be allowed to read this file, but you can reference it in code.
-    </api_key>
-    <frontend>
-      <framework>React with Vite</framework>
-      <styling>Tailwind CSS (via CDN)</styling>
-      <state_management>React hooks and context</state_management>
-      <routing>React Router for navigation</routing>
-      <markdown>React Markdown for message rendering</markdown>
-      <code_highlighting>Syntax highlighting for code blocks</code_highlighting>
-      <port>Only launch on port {frontend_port}</port>
-    </frontend>
+    <web_frontend>
+      <framework>Next.js (React) App Router</framework>
+      <styling>Tailwind CSS + shadcn/ui</styling>
+      <state_management>React Query + lightweight store (Zustand)</state_management>
+      <markdown>react-markdown + rehype plugins for code blocks</markdown>
+      <diff_viewer>Monaco Diff Editor or react-diff-viewer</diff_viewer>
+      <realtime>WebSocket client for match events; SSE fallback</realtime>
+    </web_frontend>
+
+    <extension>
+      <platform>VS Code Extension (TypeScript)</platform>
+      <ui>Activity Bar view + Webviews + Status Bar HUD</ui>
+      <auth>Device Code / PKCE OAuth with short-lived access tokens</auth>
+      <submission>zip packaging + SHA-256 hashing + resumable upload</submission>
+      <principle>Explicit opt-in commands only</principle>
+    </extension>
+
     <backend>
-      <runtime>Node.js with Express</runtime>
-      <database>SQLite with better-sqlite3</database>
-      <api_integration>Claude API for chat completions</api_integration>
-      <streaming>Server-Sent Events for streaming responses</streaming>
+      <runtime>Node.js (TypeScript) recommended for speed; Go acceptable for runner/orchestration</runtime>
+      <api>REST for core + WebSocket/SSE for match events</api>
+      <database>PostgreSQL (primary)</database>
+      <cache>Redis (sessions, match state, rate limiting)</cache>
+      <queue>Redis + BullMQ (or SQS/RabbitMQ equivalent)</queue>
+      <object_storage>S3-compatible for artifacts, logs, replays</object_storage>
+      <sandbox>Kubernetes jobs or isolated worker pool with container runtimes</sandbox>
+      <secrets>KMS/Vault for encryption keys and secrets</secrets>
     </backend>
-    <communication>
-      <api>RESTful endpoints</api>
-      <streaming>SSE for real-time message streaming</streaming>
-      <claude_api>Integration with Claude API using Anthropic SDK</claude_api>
-    </communication>
+
+    <integrations>
+      <git>
+        - GitHub OAuth: repo link submissions, optional repo creation for templates, PR creation (optional).
+        - GitLab support as phase 2.
+      </git>
+      <payments>
+        - Stripe Checkout + webhooks for credit purchases.
+      </payments>
+      <notifications>
+        - Email (Postmark/SendGrid), in-app notifications.
+      </notifications>
+      <analytics>
+        - Product analytics (PostHog/Segment) + operational monitoring (Prometheus/Grafana).
+      </analytics>
+    </integrations>
   </technology_stack>
 
-  <prerequisites>
-    <environment_setup>
-      - Repository includes .env with VITE_ANTHROPIC_API_KEY configured
-      - Frontend dependencies pre-installed via pnpm
-      - Backend code goes in /server directory
-      - Install backend dependencies as needed
-    </environment_setup>
-  </prerequisites>
+  <security_privacy_compliance>
+    <extension_privacy>
+      - Extension only reads files within an explicitly selected workspace folder for submission packaging.
+      - Show file list preview before upload; allow exclusion patterns (node_modules, dist, build, .env).
+      - Never request broad GitHub scopes from the extension; OAuth actions performed on web where possible.
+    </extension_privacy>
+
+    <uploads_and_secrets>
+      - Secret scanning on ingestion (common key patterns, .env, credential files).
+      - Block publishing of flagged artifacts to public pages; allow private storage with user acknowledgment.
+      - Enforce upload size limits; malware scanning optional.
+    </uploads_and_secrets>
+
+    <sandbox_isolation>
+      - No outbound network by default; allowlist if a challenge requires it (rare; discouraged).
+      - CPU/memory/time quotas; kill runaway processes.
+      - Read-only base images; mount artifact workspace as read-write inside sandbox only.
+    </sandbox_isolation>
+
+    <auth_and_sessions>
+      - Short-lived access tokens, refresh tokens rotated, device tokens revocable.
+      - Rate limiting on auth, match join, uploads, judging triggers, admin endpoints.
+    </auth_and_sessions>
+
+    <compliance_posture>
+      - Credits are utility-only and non-withdrawable.
+      - Prize pools are event-based payouts with explicit terms and eligibility; implement geofencing/KYC only if required.
+      - Provide GDPR/CCPA user export/delete, retention policies.
+    </compliance_posture>
+  </security_privacy_compliance>
 
   <core_features>
-    <chat_interface>
-      - Clean, centered chat layout with message bubbles
-      - Streaming message responses with typing indicator
-      - Markdown rendering with proper formatting
-      - Code blocks with syntax highlighting and copy button
-      - LaTeX/math equation rendering
-      - Image upload and display in messages
-      - Multi-turn conversations with context
-      - Message editing and regeneration
-      - Stop generation button during streaming
-      - Input field with auto-resize textarea
-      - Character count and token estimation
-      - Keyboard shortcuts (Enter to send, Shift+Enter for newline)
-    </chat_interface>
+    <challenges>
+      - Browse challenges (web + extension)
+      - Filter by stack, duration, difficulty, category, rewards
+      - Challenge versioning and publishing workflow
+      - Templates and starter kits (zip or git template refs)
+      - Requirements + constraints schema; rubric weights
+      - Sponsor challenges (branding + prize pool attachments)
+    </challenges>
 
-    <artifacts>
-      - Artifact detection and rendering in side panel
-      - Code artifact viewer with syntax highlighting
-      - HTML/SVG preview with live rendering
-      - React component preview
-      - Mermaid diagram rendering
-      - Text document artifacts
-      - Artifact editing and re-prompting
-      - Full-screen artifact view
-      - Download artifact content
-      - Artifact versioning and history
-    </artifacts>
+    <matchmaking>
+      - Ranked queue (skill-based)
+      - Direct invites (link-based)
+      - Tournament matches (bracket/swiss/ladder)
+      - Server-authoritative timer and state machine
+      - Participant readiness handshake; no-start if stake hold fails
+    </matchmaking>
 
-    <conversation_management>
-      - Create new conversations
-      - Conversation list in sidebar
-      - Rename conversations
-      - Delete conversations
-      - Search conversations by title/content
-      - Pin important conversations
-      - Archive conversations
-      - Conversation folders/organization
-      - Duplicate conversation
-      - Export conversation (JSON, Markdown, PDF)
-      - Conversation timestamps (created, last updated)
-      - Unread message indicators
-    </conversation_management>
+    <extension_flow>
+      - Sign in/out via device code
+      - View challenges and join match
+      - HUD: time remaining, status, submission state
+      - Submit: workspace selection, file preview, hashing, resumable upload
+      - Lock: explicit confirmation; after lock, submission immutable
+      - Extension never intercepts other AI tools
+    </extension_flow>
 
-    <projects>
-      - Create projects to group related conversations
-      - Project knowledge base (upload documents)
-      - Project-specific custom instructions
-      - Share projects with team (mock feature)
-      - Project settings and configuration
-      - Move conversations between projects
-      - Project templates
-      - Project analytics (usage stats)
-    </projects>
+    <submission_artifacts>
+      - Zip upload submissions + GitHub repo/commit submissions
+      - Artifact normalization + manifest generation + SHA-256 content hash
+      - Immutable storage in object store
+      - Artifact viewer + compare/diff view
+      - Download artifact zip; show README; show logs
+    </submission_artifacts>
 
-    <model_selection>
-      - Model selector dropdown with the following models:
-        - Claude Sonnet 4.5 (claude-sonnet-4-5-20250929) - default
-        - Claude Haiku 4.5 (claude-haiku-4-5-20251001)
-        - Claude Opus 4.1 (claude-opus-4-1-20250805)
-      - Model capabilities display
-      - Context window indicator
-      - Model-specific pricing info (display only)
-      - Switch models mid-conversation
-      - Model comparison view
-    </model_selection>
+    <judging>
+      - Deterministic automated checks (build, tests, lint)
+      - Optional performance checks (Lighthouse for web)
+      - Rubric engine with evidence pointers
+      - Optional AI judge constrained to rubric with explainable output
+      - Tie-breakers: deterministic rules (e.g., highest required-tests pass, then fewer critical errors, then earliest submit)
+      - Dispute workflow: re-run, moderator review, final resolution
+    </judging>
 
-    <custom_instructions>
-      - Global custom instructions
-      - Project-specific custom instructions
-      - Conversation-specific system prompts
-      - Custom instruction templates
-      - Preview how instructions affect responses
-    </custom_instructions>
+    <credits_and_rewards>
+      - Credit purchase via Stripe; issuance on webhook
+      - Credit holds/reserves for match stakes
+      - Settlement on match finalization (winner receives loser stake minus fee; ties split)
+      - Wallet: balance, holds, transaction history, invoices/receipts
+      - Redemption to platform automation services (see <automation_services>)
+      - Tournaments + prize pools (event-based claims)
+    </credits_and_rewards>
 
-    <settings_preferences>
-      - Theme selection (Light, Dark, Auto)
-      - Font size adjustment
-      - Message density (compact, comfortable, spacious)
-      - Code theme selection
-      - Language preferences
-      - Accessibility options
-      - Keyboard shortcuts reference
-      - Data export options
-      - Privacy settings
-      - API key management
-    </settings_preferences>
+    <rankings>
+      - Glicko-2 or ELO with confidence
+      - Seasons and leaderboards (overall + categories)
+      - Anti-abuse: collusion heuristics, stake caps, repeat opponent throttling
+      - Public profile pages (opt-in for artifacts)
+    </rankings>
 
-    <advanced_features>
-      - Temperature control slider
-      - Max tokens adjustment
-      - Top-p (nucleus sampling) control
-      - System prompt override
-      - Thinking/reasoning mode toggle
-      - Multi-modal input (text + images)
-      - Voice input (optional, mock UI)
-      - Response suggestions
-      - Related prompts
-      - Conversation branching
-    </advanced_features>
+    <admin_and_moderation>
+      - Challenge builder + rubric editor + publishing
+      - Template management
+      - Runner image management
+      - Disputes queue + re-judge tools
+      - Abuse reports + sanctions
+      - Prize pool configuration + claim approvals/fulfillment
+      - Audit log explorer
+    </admin_and_moderation>
 
-    <collaboration>
-      - Share conversation via link (read-only)
-      - Export conversation formats
-      - Conversation templates
-      - Prompt library
-      - Share artifacts
-      - Team workspaces (mock UI)
-    </collaboration>
-
-    <search_discovery>
-      - Search across all conversations
-      - Filter by project, date, model
-      - Prompt library with categories
-      - Example conversations
-      - Quick actions menu
-      - Command palette (Cmd/Ctrl+K)
-    </search_discovery>
-
-    <usage_tracking>
-      - Token usage display per message
-      - Conversation cost estimation
-      - Daily/monthly usage dashboard
-      - Usage limits and warnings
-      - API quota tracking
-    </usage_tracking>
-
-    <onboarding>
-      - Welcome screen for new users
-      - Feature tour highlights
-      - Example prompts to get started
-      - Quick tips and best practices
-      - Keyboard shortcuts tutorial
-    </onboarding>
-
-    <accessibility>
-      - Full keyboard navigation
-      - Screen reader support
-      - ARIA labels and roles
-      - High contrast mode
-      - Focus management
-      - Reduced motion support
-    </accessibility>
-
-    <responsive_design>
-      - Mobile-first responsive layout
-      - Touch-optimized interface
-      - Collapsible sidebar on mobile
-      - Swipe gestures for navigation
-      - Adaptive artifact display
-      - Progressive Web App (PWA) support
-    </responsive_design>
+    <observability_ops>
+      - SLIs/SLOs: match start success, submission upload success, judging completion latency, payment success
+      - Structured logs + correlation IDs
+      - Traces across join → upload → judge → settle
+      - Alerts and runbooks
+    </observability_ops>
   </core_features>
+
+  <automation_services>
+    <purpose>
+      Credits must have tangible value even for users who already pay Claude/ChatGPT subscriptions.
+      Redemption targets must be “beyond subscription” workflows: batch, CI, evals, multi-model comparisons, agent jobs.
+    </purpose>
+
+    <services>
+      <service name="Batch Runs">
+        - Run N prompts/jobs in parallel with parameter sweeps.
+        - Output aggregated results table and downloadable artifacts.
+      </service>
+
+      <service name="Evaluation Pipelines">
+        - Prompt regression tests: compare outputs vs baselines using judge rubric.
+        - Produce pass/fail gates and diff highlights.
+      </service>
+
+      <service name="CI Checks">
+        - PR bot that runs tests, generates patch suggestions, and writes a report.
+        - Integrate via GitHub App (optional) or webhook.
+      </service>
+
+      <service name="Multi-Model Comparison">
+        - Run same input across models, score via rubric, and rank outputs with evidence.
+      </service>
+
+      <service name="Agent Jobs">
+        - Bounded tasks (e.g., refactor module, generate tests) run as jobs with limits and logs.
+        - Requires sandboxing and clear job manifests.
+      </service>
+    </services>
+
+    <redemption_rules>
+      - Each service consumes credits per job/run tier (small/medium/large) based on compute and storage costs.
+      - Job outputs stored as artifacts with retention limits.
+      - Abuse controls: per-user quotas, rate limits, and suspicious activity detection.
+    </redemption_rules>
+  </automation_services>
+
+  <state_machines>
+    <match_state_machine>
+      <states>
+        - created
+        - open
+        - matched
+        - in_progress
+        - submission_locked
+        - judging
+        - finalized
+        - archived
+      </states>
+      <transitions>
+        - created -> open (match published)
+        - open -> matched (opponent found and stake holds succeed)
+        - matched -> in_progress (both ready; server start time)
+        - in_progress -> submission_locked (deadline reached or both lock)
+        - submission_locked -> judging (pipeline queued)
+        - judging -> finalized (scores computed; settlement executed)
+        - finalized -> archived (post-dispute window)
+      </transitions>
+      <invariants>
+        - Deadlines use server time.
+        - After submission_locked, artifacts immutable.
+        - Settlement must be idempotent and tied to a single finalized state.
+      </invariants>
+    </match_state_machine>
+
+    <credit_ledger_invariants>
+      - Available balance can never go negative.
+      - Holds reserve credits; release returns to available.
+      - Settlement transfers are atomic and idempotent.
+      - Every ledger entry has an idempotency key.
+    </credit_ledger_invariants>
+  </state_machines>
+
+  <rubric_schema>
+    <requirements_json_example>
+      {
+        "requirements": [
+          {
+            "id": "R1",
+            "title": "Dashboard Layout",
+            "description": "Responsive dashboard with sidebar, header, main content cards",
+            "weight": 25,
+            "evidence": ["screenshots_optional", "dom_structure", "css_breakpoints"],
+            "tests": ["layout.spec.ts"]
+          },
+          {
+            "id": "R2",
+            "title": "Data Visualization",
+            "description": "At least 2 charts with mock data and legends",
+            "weight": 25,
+            "evidence": ["rendered_charts", "accessibility_labels"],
+            "tests": ["charts.spec.ts"]
+          },
+          {
+            "id": "R3",
+            "title": "Filtering & State",
+            "description": "Filters update displayed values; state management clear",
+            "weight": 25,
+            "evidence": ["filter_interactions", "state_store"],
+            "tests": ["filters.spec.ts"]
+          },
+          {
+            "id": "R4",
+            "title": "Quality",
+            "description": "Build passes, lint passes, no critical console errors",
+            "weight": 25,
+            "evidence": ["build_log", "lint_log"],
+            "tests": ["build.spec.ts", "lint.spec.ts"]
+          }
+        ],
+        "tie_breakers": ["tests_passed", "critical_errors", "submit_time"]
+      }
+    </requirements_json_example>
+  </rubric_schema>
 
   <database_schema>
     <tables>
       <users>
-        - id, email, name, avatar_url
-        - created_at, last_login
-        - preferences (JSON: theme, font_size, etc.)
-        - custom_instructions
+        - id (uuid), email, display_name, avatar_url
+        - created_at, last_login_at
+        - roles (user/admin/moderator)
+        - flags (is_banned, is_verified)
+        - preferences (json)
       </users>
 
-      <projects>
-        - id, user_id, name, description, color
-        - custom_instructions, knowledge_base_path
-        - created_at, updated_at
-        - is_archived, is_pinned
-      </projects>
+      <oauth_accounts>
+        - id, user_id, provider (github/google)
+        - provider_user_id
+        - access_token_encrypted (optional), refresh_token_encrypted (optional)
+        - scopes (json), created_at, updated_at
+      </oauth_accounts>
 
-      <conversations>
-        - id, user_id, project_id, title
-        - model, created_at, updated_at, last_message_at
-        - is_archived, is_pinned, is_deleted
-        - settings (JSON: temperature, max_tokens, etc.)
-        - token_count, message_count
-      </conversations>
+      <challenges>
+        - id, slug, title, description
+        - category, difficulty
+        - is_published
+        - created_by, created_at, updated_at
+      </challenges>
 
-      <messages>
-        - id, conversation_id, role (user/assistant/system)
-        - content, created_at, edited_at
-        - tokens, finish_reason
-        - images (JSON array of image data)
-        - parent_message_id (for branching)
-      </messages>
+      <challenge_versions>
+        - id, challenge_id, version_number
+        - requirements_json, rubric_json, constraints_json
+        - template_ref (s3 key or git ref)
+        - judge_image_ref (container digest/tag)
+        - created_at, published_at
+      </challenge_versions>
+
+      <matches>
+        - id, challenge_version_id
+        - status, mode (ranked/invite/tournament)
+        - created_by, created_at
+        - start_at, end_at, lock_at
+        - config_hash
+        - dispute_status
+      </matches>
+
+      <match_participants>
+        - id, match_id, user_id, seat (A/B)
+        - joined_at, ready_at
+        - submission_id (nullable), forfeit_at (nullable)
+      </match_participants>
+
+      <submissions>
+        - id, match_id, user_id
+        - method (zip/github_repo)
+        - artifact_id
+        - submitted_at, locked_at
+        - client_type, client_version
+        - source_ref (repo url/commit/upload id)
+      </submissions>
 
       <artifacts>
-        - id, message_id, conversation_id
-        - type (code/html/svg/react/mermaid/text)
-        - title, identifier, language
-        - content, version
-        - created_at, updated_at
+        - id, content_hash (unique)
+        - storage_key (s3)
+        - size_bytes
+        - created_at
+        - manifest_json
+        - secret_scan_status (clean/flagged)
       </artifacts>
 
-      <shared_conversations>
-        - id, conversation_id, share_token
-        - created_at, expires_at, view_count
-        - is_public
-      </shared_conversations>
+      <judgement_runs>
+        - id, match_id, started_at, completed_at
+        - status (queued/running/success/failed)
+        - judge_version
+        - logs_key (s3)
+        - environment_ref (container digest)
+      </judgement_runs>
 
-      <prompt_library>
-        - id, user_id, title, description
-        - prompt_template, category, tags (JSON)
-        - is_public, usage_count
+      <scores>
+        - id, judgement_run_id, match_id, user_id
+        - total_score
+        - breakdown_json
+        - automated_results_json
+        - ai_judge_results_json (optional)
+        - created_at
+      </scores>
+
+      <credit_accounts>
+        - id, user_id
+        - balance_available
+        - balance_reserved
         - created_at, updated_at
-      </prompt_library>
+      </credit_accounts>
 
-      <conversation_folders>
-        - id, user_id, project_id, name, parent_folder_id
-        - created_at, position
-      </conversation_folders>
+      <credit_holds>
+        - id, account_id, match_id
+        - amount_reserved
+        - status (active/released/consumed)
+        - created_at, released_at
+      </credit_holds>
 
-      <conversation_folder_items>
-        - id, folder_id, conversation_id
-      </conversation_folder_items>
+      <credit_ledger_entries>
+        - id, idempotency_key
+        - account_id, counterparty_account_id (nullable)
+        - type (purchase/earn/stake_hold/stake_release/transfer/fee/refund/redemption)
+        - amount
+        - match_id (nullable)
+        - metadata_json
+        - created_at
+      </credit_ledger_entries>
 
-      <usage_tracking>
-        - id, user_id, conversation_id, message_id
-        - model, input_tokens, output_tokens
-        - cost_estimate, created_at
-      </usage_tracking>
+      <purchases>
+        - id, user_id, stripe_payment_intent_id
+        - amount_fiat, currency
+        - credits_issued
+        - status (pending/succeeded/failed/refunded)
+        - created_at, updated_at
+      </purchases>
 
-      <api_keys>
-        - id, user_id, key_name, api_key_hash
-        - created_at, last_used_at
-        - is_active
-      </api_keys>
+      <rankings>
+        - id, user_id, season_id
+        - rating, deviation, volatility
+        - updated_at
+      </rankings>
+
+      <seasons>
+        - id, name, start_at, end_at, rules_json
+      </seasons>
+
+      <tournaments>
+        - id, name, description
+        - format, start_at, end_at
+        - entry_fee_credits
+        - prize_pool_json
+        - rules_json
+        - created_at
+      </tournaments>
+
+      <prize_claims>
+        - id, tournament_id, user_id
+        - prize_type (cash/crypto/hardware/saas_bundle)
+        - amount_or_bundle_ref
+        - status (pending/approved/fulfilled/denied)
+        - created_at, updated_at
+      </prize_claims>
+
+      <disputes>
+        - id, match_id, opened_by_user_id
+        - reason, evidence_json
+        - status (open/in_review/resolved)
+        - resolution_json
+        - created_at, updated_at
+      </disputes>
+
+      <moderation_actions>
+        - id, moderator_user_id, target_user_id
+        - action_type (warn/suspend/ban)
+        - reason
+        - created_at
+      </moderation_actions>
+
+      <events_audit>
+        - id, actor_user_id (nullable)
+        - event_type
+        - entity_type, entity_id
+        - payload_json
+        - created_at
+      </events_audit>
     </tables>
   </database_schema>
 
   <api_endpoints_summary>
     <authentication>
-      - POST /api/auth/login
+      - POST /api/auth/device/start
+      - POST /api/auth/device/confirm
       - POST /api/auth/logout
-      - GET /api/auth/me
-      - PUT /api/auth/profile
+      - GET  /api/auth/me
     </authentication>
 
-    <conversations>
-      - GET /api/conversations
-      - POST /api/conversations
-      - GET /api/conversations/:id
-      - PUT /api/conversations/:id
-      - DELETE /api/conversations/:id
-      - POST /api/conversations/:id/duplicate
-      - POST /api/conversations/:id/export
-      - PUT /api/conversations/:id/archive
-      - PUT /api/conversations/:id/pin
-      - POST /api/conversations/:id/branch
-    </conversations>
+    <challenges>
+      - GET  /api/challenges
+      - GET  /api/challenges/:id
+      - GET  /api/challenges/:id/versions
+      - GET  /api/challenge-versions/:versionId
+      - POST /api/admin/challenges
+      - POST /api/admin/challenges/:id/publish
+      - POST /api/admin/challenges/:id/versions
+    </challenges>
 
-    <messages>
-      - GET /api/conversations/:id/messages
-      - POST /api/conversations/:id/messages
-      - PUT /api/messages/:id
-      - DELETE /api/messages/:id
-      - POST /api/messages/:id/regenerate
-      - GET /api/messages/stream (SSE endpoint)
-    </messages>
+    <matches>
+      - POST /api/matches (create invite match)
+      - POST /api/matches/queue (join ranked queue)
+      - GET  /api/matches/:id
+      - POST /api/matches/:id/join
+      - POST /api/matches/:id/ready
+      - POST /api/matches/:id/forfeit
+      - POST /api/matches/:id/lock
+      - GET  /api/matches/:id/events (WS/SSE)
+    </matches>
+
+    <submissions>
+      - POST /api/matches/:id/submissions/init
+      - PUT  /api/uploads/:uploadId/part
+      - POST /api/uploads/:uploadId/complete
+      - POST /api/matches/:id/submissions/commit
+      - POST /api/matches/:id/submissions/from-github
+      - GET  /api/submissions/:id
+    </submissions>
 
     <artifacts>
-      - GET /api/conversations/:id/artifacts
-      - GET /api/artifacts/:id
-      - PUT /api/artifacts/:id
-      - DELETE /api/artifacts/:id
-      - POST /api/artifacts/:id/fork
-      - GET /api/artifacts/:id/versions
+      - GET  /api/artifacts/:id
+      - GET  /api/artifacts/:id/files
+      - GET  /api/artifacts/:id/download
+      - GET  /api/matches/:id/compare
     </artifacts>
 
-    <projects>
-      - GET /api/projects
-      - POST /api/projects
-      - GET /api/projects/:id
-      - PUT /api/projects/:id
-      - DELETE /api/projects/:id
-      - POST /api/projects/:id/knowledge
-      - GET /api/projects/:id/conversations
-      - PUT /api/projects/:id/settings
-    </projects>
+    <judging>
+      - GET  /api/matches/:id/results
+      - POST /api/admin/judging/retry/:matchId
+      - GET  /api/judgement-runs/:id/logs
+    </judging>
 
-    <sharing>
-      - POST /api/conversations/:id/share
-      - GET /api/share/:token
-      - DELETE /api/share/:token
-      - PUT /api/share/:token/settings
-    </sharing>
+    <credits>
+      - GET  /api/credits/balance
+      - GET  /api/credits/history
+      - POST /api/credits/stake
+      - POST /api/credits/release
+      - POST /api/credits/settle/:matchId
+      - POST /api/credits/redeem (automation services)
+    </credits>
 
-    <prompts>
-      - GET /api/prompts/library
-      - POST /api/prompts/library
-      - GET /api/prompts/:id
-      - PUT /api/prompts/:id
-      - DELETE /api/prompts/:id
-      - GET /api/prompts/categories
-      - GET /api/prompts/examples
-    </prompts>
+    <payments>
+      - POST /api/payments/stripe/checkout
+      - POST /api/payments/stripe/webhook
+      - GET  /api/payments/history
+    </payments>
 
-    <search>
-      - GET /api/search/conversations?q=query
-      - GET /api/search/messages?q=query
-      - GET /api/search/artifacts?q=query
-      - GET /api/search/prompts?q=query
-    </search>
+    <rankings>
+      - GET  /api/leaderboards
+      - GET  /api/users/:id/profile
+      - GET  /api/users/:id/matches
+    </rankings>
 
-    <folders>
-      - GET /api/folders
-      - POST /api/folders
-      - PUT /api/folders/:id
-      - DELETE /api/folders/:id
-      - POST /api/folders/:id/items
-      - DELETE /api/folders/:id/items/:conversationId
-    </folders>
+    <tournaments>
+      - GET  /api/tournaments
+      - POST /api/tournaments/:id/join
+      - GET  /api/tournaments/:id/bracket
+      - POST /api/admin/tournaments
+      - POST /api/admin/tournaments/:id/publish
+    </tournaments>
 
-    <usage>
-      - GET /api/usage/daily
-      - GET /api/usage/monthly
-      - GET /api/usage/by-model
-      - GET /api/usage/conversations/:id
-    </usage>
+    <prizes>
+      - GET  /api/tournaments/:id/prizes
+      - POST /api/prize-claims
+      - GET  /api/prize-claims/mine
+      - POST /api/admin/prize-claims/:id/approve
+      - POST /api/admin/prize-claims/:id/fulfill
+    </prizes>
 
-    <settings>
-      - GET /api/settings
-      - PUT /api/settings
-      - GET /api/settings/custom-instructions
-      - PUT /api/settings/custom-instructions
-    </settings>
+    <disputes>
+      - POST /api/matches/:id/disputes
+      - GET  /api/matches/:id/disputes
+      - POST /api/admin/disputes/:id/resolve
+    </disputes>
 
-    <claude_api>
-      - POST /api/claude/chat (proxy to Claude API)
-      - POST /api/claude/chat/stream (streaming proxy)
-      - GET /api/claude/models
-      - POST /api/claude/images/upload
-    </claude_api>
+    <admin_ops>
+      - GET  /api/admin/audit
+      - GET  /api/admin/system/health
+      - GET  /api/admin/moderation/reports
+      - POST /api/admin/moderation/actions
+    </admin_ops>
   </api_endpoints_summary>
 
   <ui_layout>
-    <main_structure>
-      - Three-column layout: sidebar (conversations), main (chat), panel (artifacts)
-      - Collapsible sidebar with resize handle
-      - Responsive breakpoints: mobile (single column), tablet (two column), desktop (three column)
-      - Persistent header with project/model selector
-      - Bottom input area with send button and options
-    </main_structure>
+    <web_app>
+      <main_nav>
+        - Challenges
+        - Ranked
+        - Tournaments
+        - Wallet
+        - Profile
+        - Admin (role-gated)
+      </main_nav>
 
-    <sidebar_left>
-      - New chat button (prominent)
-      - Project selector dropdown
-      - Search conversations input
-      - Conversations list (grouped by date: Today, Yesterday, Previous 7 days, etc.)
-      - Folder tree view (collapsible)
-      - Settings gear icon at bottom
-      - User profile at bottom
-    </sidebar_left>
+      <pages>
+        <challenges_page>
+          - Filters: stack, duration, category, difficulty, rewards
+          - Challenge cards: stake, time limit, template availability
+        </challenges_page>
 
-    <main_chat_area>
-      - Conversation title (editable inline)
-      - Model selector badge
-      - Message history (scrollable)
-      - Welcome screen for new conversations
-      - Suggested prompts (empty state)
-      - Input area with formatting toolbar
-      - Attachment button for images
-      - Send button with loading state
-      - Stop generation button
-    </main_chat_area>
+        <match_page>
+          - Rules and timer timeline
+          - Submissions (locked) with artifact viewer
+          - Compare view and diff
+          - Judging breakdown and logs
+          - Dispute button + status
+        </match_page>
 
-    <artifacts_panel>
-      - Artifact header with title and type badge
-      - Code editor or preview pane
-      - Tabs for multiple artifacts
-      - Full-screen toggle
-      - Download button
-      - Edit/Re-prompt button
-      - Version selector
-      - Close panel button
-    </artifacts_panel>
+        <wallet_page>
+          - Credits balance + reserved holds
+          - Purchase credits
+          - Redemption to automation services
+          - Ledger history
+        </wallet_page>
 
-    <modals_overlays>
-      - Settings modal (tabbed interface)
-      - Share conversation modal
-      - Export options modal
-      - Project settings modal
-      - Prompt library modal
-      - Command palette overlay
-      - Keyboard shortcuts reference
-    </modals_overlays>
+        <tournaments_page>
+          - Upcoming/live/completed events
+          - Bracket view
+          - Prize pool terms and claim flow
+        </tournaments_page>
+
+        <profile_page>
+          - Rank, badges, match history
+          - Public artifacts toggle
+          - Stats by category
+        </profile_page>
+
+        <admin_console>
+          - Challenge builder and version publisher
+          - Rubric editor with validation
+          - Template manager
+          - Dispute queue + re-judge
+          - Prize claims queue
+          - Moderation tools + audit logs
+        </admin_console>
+      </pages>
+    </web_app>
+
+    <extension>
+      <views>
+        - Challenges list
+        - Active match panel
+        - Recent matches (read-only)
+      </views>
+      <hud>
+        - Status bar: time remaining | match state | quick submit
+      </hud>
+      <commands>
+        - CodeArena: Sign In
+        - CodeArena: Browse Challenges
+        - CodeArena: Join Match
+        - CodeArena: Submit
+        - CodeArena: Lock Submission
+        - CodeArena: Open Match in Web
+      </commands>
+    </extension>
   </ui_layout>
 
-  <design_system>
-    <color_palette>
-      - Primary: Orange/amber accent (#CC785C claude-style)
-      - Background: White (light mode), Dark gray (#1A1A1A dark mode)
-      - Surface: Light gray (#F5F5F5 light), Darker gray (#2A2A2A dark)
-      - Text: Near black (#1A1A1A light), Off-white (#E5E5E5 dark)
-      - Borders: Light gray (#E5E5E5 light), Dark gray (#404040 dark)
-      - Code blocks: Monaco editor theme
-    </color_palette>
+  <testing_quality>
+    <test_strategy>
+      <unit_tests>
+        - Ledger invariants
+        - Match state machine transitions
+        - Artifact hashing and manifest generation
+        - Rubric scoring calculations
+      </unit_tests>
 
-    <typography>
-      - Sans-serif system font stack (Inter, SF Pro, Roboto, system-ui)
-      - Headings: font-semibold
-      - Body: font-normal, leading-relaxed
-      - Code: Monospace (JetBrains Mono, Consolas, Monaco)
-      - Message text: text-base (16px), comfortable line-height
-    </typography>
+      <integration_tests>
+        - Auth device flow (web + extension)
+        - Upload init/part/complete/commit (resumable)
+        - Judging pipeline orchestration and re-run idempotency
+        - Stripe webhook issuance and refund handling
+      </integration_tests>
 
-    <components>
-      <message_bubble>
-        - User messages: Right-aligned, subtle background
-        - Assistant messages: Left-aligned, no background
-        - Markdown formatting with proper spacing
-        - Inline code with bg-gray-100 background
-        - Code blocks with syntax highlighting
-        - Copy button on code blocks
-      </message_bubble>
+      <e2e_tests>
+        - Join match → submit → judge → settle → view results
+        - Dispute → re-judge → resolve → final settlement
+        - Tournament join → bracket progression → prize claim
+      </e2e_tests>
 
-      <buttons>
-        - Primary: Orange/amber background, white text, rounded
-        - Secondary: Border style with hover fill
-        - Icon buttons: Square with hover background
-        - Disabled state: Reduced opacity, no pointer events
-      </buttons>
+      <security_tests>
+        - Upload path traversal prevention
+        - Secret scan coverage checks
+        - Sandbox escape attempts (baseline)
+        - Rate limit verification
+      </security_tests>
 
-      <inputs>
-        - Rounded borders with focus ring
-        - Textarea auto-resize
-        - Placeholder text in gray
-        - Error states in red
-        - Character counter
-      </inputs>
+      <performance_tests>
+        - Concurrent match spikes
+        - Concurrent submission uploads
+        - Judging throughput and queue backpressure
+      </performance_tests>
+    </test_strategy>
+  </testing_quality>
 
-      <cards>
-        - Subtle border or shadow
-        - Rounded corners (8px)
-        - Padding: p-4 to p-6
-        - Hover state: slight shadow increase
-      </cards>
-    </components>
+  <devops_deployment>
+    <environments>
+      - dev (local)
+      - staging (feature-flagged)
+      - production (canary rollout)
+    </environments>
 
-    <animations>
-      - Smooth transitions (150-300ms)
-      - Fade in for new messages
-      - Slide in for sidebar
-      - Typing indicator animation
-      - Loading spinner for generation
-      - Skeleton loaders for content
-    </animations>
-  </design_system>
+    <ci_cd>
+      - Lint/test/build per PR
+      - Container build and image signing for judging runners
+      - Automatic staging deploy on main merge
+      - Manual promotion to prod + canary
+      - Extension packaging pipeline (vsix) + marketplace publishing process
+    </ci_cd>
 
-  <key_interactions>
-    <message_flow>
-      1. User types message in input field
-      2. Optional: Attach images via button
-      3. Click send or press Enter
-      4. Message appears in chat immediately
-      5. Typing indicator shows while waiting
-      6. Response streams in word by word
-      7. Code blocks render with syntax highlighting
-      8. Artifacts detected and rendered in side panel
-      9. Message complete, enable regenerate option
-    </message_flow>
+    <observability>
+      - Structured logging with correlation IDs (match_id, user_id, judgement_run_id)
+      - Metrics: match start success, upload success, judging latency, settlement success
+      - Tracing across services
+      - Alerting + runbooks
+    </observability>
 
-    <artifact_flow>
-      1. Assistant generates artifact in response
-      2. Artifact panel slides in from right
-      3. Content renders (code with highlighting or live preview)
-      4. User can edit artifact inline
-      5. "Re-prompt" button to iterate with Claude
-      6. Download or copy artifact content
-      7. Full-screen mode for detailed work
-      8. Close panel to return to chat focus
-    </artifact_flow>
+    <data_retention>
+      - Artifact lifecycle rules (e.g., 90d standard, extended for tournaments)
+      - Logs retention (e.g., 30d hot, 180d cold)
+      - User deletion/export tooling
+    </data_retention>
+  </devops_deployment>
 
-    <conversation_management>
-      1. Click "New Chat" to start fresh conversation
-      2. Conversations auto-save with first message
-      3. Auto-generate title from first exchange
-      4. Click title to rename inline
-      5. Drag conversations into folders
-      6. Right-click for context menu (pin, archive, delete, export)
-      7. Search filters conversations in real-time
-      8. Click conversation to switch context
-    </conversation_management>
-  </key_interactions>
+  <implementation_plan_agile>
+    <cadence>
+      - 2-week sprints
+      - Release train each sprint behind feature flags
+      - Definition of Done includes tests + observability + docs
+    </cadence>
 
-  <implementation_steps>
-    <step number="1">
-      <title>Setup Project Foundation and Database</title>
-      <tasks>
-        - Initialize Express server with SQLite database
-        - Set up Claude API client with streaming support
-        - Create database schema with migrations
-        - Implement authentication endpoints
-        - Set up basic CORS and middleware
-        - Create health check endpoint
-      </tasks>
-    </step>
+    <phases>
+      <phase name="Phase 1: Foundation & Architecture">
+        - Monorepo + CI/CD + environments + feature flags
+        - ADRs for judging/ledger/security
+        - Base observability and audit logging
+      </phase>
 
-    <step number="2">
-      <title>Build Core Chat Interface</title>
-      <tasks>
-        - Create main layout with sidebar and chat area
-        - Implement message display with markdown rendering
-        - Add streaming message support with SSE
-        - Build input area with auto-resize textarea
-        - Add code block syntax highlighting
-        - Implement stop generation functionality
-        - Add typing indicators and loading states
-      </tasks>
-    </step>
+      <phase name="Phase 2: Identity & Extension Auth">
+        - Device auth for extension (PKCE)
+        - Session management, revocation, rate limiting
+        - Role gating for admin/moderator
+      </phase>
 
-    <step number="3">
-      <title>Conversation Management</title>
-      <tasks>
-        - Create conversation list in sidebar
-        - Implement new conversation creation
-        - Add conversation switching
-        - Build conversation rename functionality
-        - Implement delete with confirmation
-        - Add conversation search
-        - Create conversation grouping by date
-      </tasks>
-    </step>
+      <phase name="Phase 3: Challenges & Versioning">
+        - Challenge schema, rubric editor, publishing flow
+        - Template management and version pinning
+        - Challenge discovery web UI + extension list view
+      </phase>
 
-    <step number="4">
-      <title>Artifacts System</title>
-      <tasks>
-        - Build artifact detection from Claude responses
-        - Create artifact rendering panel
-        - Implement code artifact viewer
-        - Add HTML/SVG live preview
-        - Build artifact editing interface
-        - Add artifact versioning
-        - Implement full-screen artifact view
-      </tasks>
-    </step>
+      <phase name="Phase 4: Match Engine & Matchmaking">
+        - Match state machine, timers, WS/SSE events
+        - Ranked queue and invite links
+        - Extension HUD + active match panel
+      </phase>
 
-    <step number="5">
-      <title>Projects and Organization</title>
-      <tasks>
-        - Create projects CRUD endpoints
-        - Build project selector UI
-        - Implement project-specific custom instructions
-        - Add folder system for conversations
-        - Create drag-and-drop organization
-        - Build project settings panel
-      </tasks>
-    </step>
+      <phase name="Phase 5: Submissions & Artifacts">
+        - Extension packaging, file preview, hashing, resumable uploads
+        - Ingestion normalization + secret scan + artifact storage
+        - Web artifact viewer + compare/diff
+      </phase>
 
-    <step number="6">
-      <title>Advanced Features</title>
-      <tasks>
-        - Add model selection dropdown
-        - Implement temperature and parameter controls
-        - Build image upload functionality
-        - Create message editing and regeneration
-        - Add conversation branching
-        - Implement export functionality
-      </tasks>
-    </step>
+      <phase name="Phase 6: Judging & Scoring">
+        - Sandbox runner pool with pinned images
+        - Test harness + logs + evidence capture
+        - Rubric scoring engine + deterministic tie-breakers
+        - Optional AI judge constrained to rubric
+      </phase>
 
-    <step number="7">
-      <title>Settings and Customization</title>
-      <tasks>
-        - Build settings modal with tabs
-        - Implement theme switching (light/dark)
-        - Add custom instructions management
-        - Create keyboard shortcuts
-        - Build prompt library
-        - Add usage tracking dashboard
-      </tasks>
-    </step>
+      <phase name="Phase 7: Credits Wallet & Ledger">
+        - Stripe purchase + webhook issuance
+        - Holds/reserves, staking, idempotent settlement
+        - Wallet UI with history and receipts
+      </phase>
 
-    <step number="8">
-      <title>Sharing and Collaboration</title>
-      <tasks>
-        - Implement conversation sharing with tokens
-        - Create public share view
-        - Add export to multiple formats
-        - Build prompt templates
-        - Create example conversations
-      </tasks>
-    </step>
+      <phase name="Phase 8: Rankings, Seasons, Disputes, Moderation">
+        - Glicko/ELO, leaderboards, seasons
+        - Dispute workflow + admin re-judge tools
+        - Anti-abuse heuristics and enforcement
+      </phase>
 
-    <step number="9">
-      <title>Polish and Optimization</title>
-      <tasks>
-        - Optimize for mobile responsiveness
-        - Add command palette (Cmd+K)
-        - Implement comprehensive keyboard navigation
-        - Add onboarding flow
-        - Create accessibility improvements
-        - Performance optimization and caching
-      </tasks>
-    </step>
-  </implementation_steps>
+      <phase name="Phase 9: Tournaments & Prize Pools">
+        - Brackets/swiss/ladder
+        - Prize pool terms + claim workflows
+        - Admin approvals and fulfillment tooling
+      </phase>
+
+      <phase name="Phase 10: Automation Redemption Products">
+        - Batch runs, eval pipelines, CI checks, multi-model compare, agent jobs
+        - Credit redemption + job orchestration + sandboxing
+        - Usage reporting and cost control
+      </phase>
+
+      <phase name="Phase 11: Production Hardening & Scale">
+        - Pen test, privacy compliance tooling, load testing
+        - SLOs, runbooks, on-call readiness
+        - Extension marketplace launch readiness
+      </phase>
+    </phases>
+  </implementation_plan_agile>
 
   <success_criteria>
     <functionality>
-      - Streaming chat responses work smoothly
-      - Artifact detection and rendering accurate
-      - Conversation management intuitive and reliable
-      - Project organization clear and useful
-      - Image upload and display working
-      - All CRUD operations functional
+      - Match join/start/submit/judge/settle works reliably end-to-end.
+      - Judging is reproducible with evidence-backed scoring.
+      - Credits ledger is audit-grade and idempotent.
+      - Extension is non-invasive and transparent about uploads.
+      - Tournaments and prize pools operate with clear terms and claims tooling.
+      - Automation redemption provides real value beyond subscription chat tools.
     </functionality>
 
     <user_experience>
-      - Interface matches claude.ai design language
-      - Responsive on all device sizes
-      - Smooth animations and transitions
-      - Fast response times and minimal lag
-      - Intuitive navigation and workflows
-      - Clear feedback for all actions
+      - Builders compete without workflow disruption.
+      - Clear explanations for wins/losses.
+      - Credits feel valuable via redemption and prize pools.
+      - Artifacts and comparisons are shareable and compelling.
     </user_experience>
 
     <technical_quality>
-      - Clean, maintainable code structure
-      - Proper error handling throughout
-      - Secure API key management
-      - Optimized database queries
-      - Efficient streaming implementation
-      - Comprehensive testing coverage
+      - High test coverage and operational visibility.
+      - Strong sandbox isolation and secret handling.
+      - Stable CI/CD with staged rollouts and feature flags.
     </technical_quality>
-
-    <design_polish>
-      - Consistent with claude.ai visual design
-      - Beautiful typography and spacing
-      - Smooth animations and micro-interactions
-      - Excellent contrast and accessibility
-      - Professional, polished appearance
-      - Dark mode fully implemented
-    </design_polish>
   </success_criteria>
 </project_specification>

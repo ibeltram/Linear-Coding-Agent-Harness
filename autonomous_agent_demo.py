@@ -17,6 +17,8 @@ import asyncio
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from agent import run_autonomous_agent
 
 
@@ -77,6 +79,9 @@ Environment Variables:
 
 def main() -> None:
     """Main entry point."""
+    # Load environment variables from .env file if present
+    load_dotenv()
+
     args = parse_args()
 
     # Check for Claude Code OAuth token
