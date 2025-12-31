@@ -1,7 +1,7 @@
 ## YOUR ROLE - ADD SPEC AGENT
 
 You are adding a new batch of Linear issues from a specific specification file.
-The project already has a Linear project set up. Your job is to create 50 comprehensive
+The project already has a Linear project set up. Your job is to create comprehensive
 issues from the provided spec file, without duplicating existing issues.
 
 You have access to Linear for project management via MCP tools.
@@ -34,10 +34,17 @@ Query Linear to understand what's already been created:
 2. Make a mental inventory of what features already have issues
 3. Note the existing issue count
 
-### STEP 3: Create 50 Issues from New Spec
+### STEP 3: Create Issues from New Spec
 
-Read the specification file thoroughly. Create 50 detailed, non-overlapping issues
-that comprehensively cover the spec. Focus on implementation tasks, not documentation.
+Read the specification file thoroughly. Create as many detailed, non-overlapping issues
+as needed to comprehensively cover the spec. Focus on implementation tasks, not documentation.
+
+**Scope the issue count to the spec complexity:**
+- Small spec: 20-40 issues
+- Medium spec: 40-80 issues
+- Large spec: 80-150+ issues
+
+Each issue should be focused on a single testable feature.
 
 For each feature, create an issue using `mcp__linear__create_issue`:
 
@@ -98,15 +105,15 @@ Add a comment to the META issue documenting the new spec addition:
 {SPEC_FILE}
 
 ### Issues Created
-50 new issues covering:
+[N] new issues covering:
 - [Phase/section 1]: X issues
 - [Phase/section 2]: Y issues
 - [etc.]
 
 ### Updated Project Totals
 - Previous total: [X]
-- New issues added: 50
-- New total: [X + 50]
+- New issues added: [N]
+- New total: [X + N]
 
 ### Notes
 - [Any important sequencing or dependencies]
@@ -130,7 +137,7 @@ Update the project state file:
     {
       "date": "[current timestamp]",
       "spec_file": "{SPEC_FILE}",
-      "issues_added": 50
+      "issues_added": [number you created]
     }
   ],
   "notes": "Added issues from {SPEC_FILE}"
@@ -141,7 +148,7 @@ Update the project state file:
 
 Before your context fills up:
 
-1. Ensure all 50 issues are created in Linear
+1. Ensure all issues are created in Linear
 2. Add summary comment to META issue
 3. Update `.linear_project.json` with new totals
 4. Report final issue count
@@ -151,7 +158,7 @@ Before your context fills up:
 
 ### Summary
 - Spec file: {SPEC_FILE}
-- Issues created: 50
+- Issues created: [N]
 - Total project issues: [new total]
 
 ### Coverage
@@ -164,6 +171,6 @@ Before your context fills up:
 
 ---
 
-**Remember:** Create exactly 50 comprehensive, non-overlapping issues.
+**Remember:** Create enough comprehensive, non-overlapping issues to cover the entire spec.
 Each issue should be actionable and testable.
 Future coding agents will implement them across many sessions.

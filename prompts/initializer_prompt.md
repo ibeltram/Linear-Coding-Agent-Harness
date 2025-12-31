@@ -31,8 +31,16 @@ Before creating issues, you need to set up Linear:
 ### CRITICAL TASK: Create Linear Issues
 
 Based on `app_spec.txt`, create Linear issues for each feature using the
-`mcp__linear__create_issue` tool. Create 50 detailed issues that
-comprehensively cover all features in the spec.
+`mcp__linear__create_issue` tool. Create as many issues as needed to
+comprehensively cover ALL features in the spec.
+
+**Scope the issue count to the spec complexity:**
+- Small spec (simple app): 20-40 issues
+- Medium spec (typical app): 40-80 issues
+- Large spec (complex platform): 80-150+ issues
+
+Each issue should be focused on a single testable feature - don't combine
+unrelated features just to reduce count.
 
 **For each feature, create an issue with:**
 
@@ -66,7 +74,7 @@ priority: 1-4 based on importance (1=urgent/foundational, 4=low/polish)
 ```
 
 **Requirements for Linear Issues:**
-- Create 50 issues total covering all features in the spec
+- Create enough issues to cover ALL features in the spec (don't skip any)
 - Mix of functional and style features (note category in description)
 - Order by priority: foundational features get priority 1-2, polish features get 3-4
 - Include detailed test steps in each issue description
@@ -157,7 +165,7 @@ Create a file called `.linear_project.json` with the following information:
   "project_id": "[ID of the Linear project you created]",
   "project_name": "[Name of the project from app_spec.txt]",
   "meta_issue_id": "[ID of the META issue you created]",
-  "total_issues": 50,
+  "total_issues": [number of issues you created],
   "notes": "Project initialized by initializer agent"
 }
 ```
@@ -184,14 +192,14 @@ Before your context fills up:
    ## Session 1 Complete - Initialization
 
    ### Accomplished
-   - Created 50 Linear issues from app_spec.txt
+   - Created [N] Linear issues from app_spec.txt
    - Set up project structure
    - Created init.sh
    - Initialized git repository
    - [Any features started/completed]
 
    ### Linear Status
-   - Total issues: 50
+   - Total issues: [N]
    - Done: X
    - In Progress: Y
    - Todo: Z

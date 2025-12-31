@@ -11,8 +11,10 @@ import os
 # Environment variables (must be set before running)
 LINEAR_API_KEY = os.environ.get("LINEAR_API_KEY")
 
-# Default number of issues to create (can be overridden via command line)
-DEFAULT_ISSUE_COUNT = 50
+# Issue count is now dynamic based on spec complexity
+# Small spec: 20-40, Medium: 40-80, Large: 80-150+
+# This constant is deprecated but kept for backwards compatibility
+DEFAULT_ISSUE_COUNT = None  # Dynamic
 
 # Issue status workflow (Linear default states)
 STATUS_TODO = "Todo"

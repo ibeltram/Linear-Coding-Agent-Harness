@@ -50,7 +50,7 @@ Examples:
   # Add new features from updated spec (creates new Linear issues)
   python autonomous_agent_demo.py --project-dir ./claude_clone --add-features
 
-  # Add 50 issues from a specific spec file
+  # Add issues from a specific spec file
   python autonomous_agent_demo.py --project-dir ./claude_clone --add-spec COMPLETE_SPEC.txt
 
   # Keep running even after all issues are Done
@@ -96,7 +96,7 @@ Environment Variables:
         "--add-spec",
         type=str,
         default=None,
-        help="Add issues from a specific spec file (e.g., COMPLETE_SPEC.txt). Creates 50 new issues from this spec.",
+        help="Add issues from a specific spec file (e.g., COMPLETE_SPEC.txt). Creates issues based on spec complexity.",
     )
 
     parser.add_argument(

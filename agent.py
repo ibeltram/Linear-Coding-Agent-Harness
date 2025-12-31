@@ -120,7 +120,7 @@ async def run_autonomous_agent(
         model: Claude model to use
         max_iterations: Maximum number of iterations (None for unlimited)
         add_features: If True, run add-features mode to create issues from updated spec
-        add_spec: If provided, create 50 issues from this spec file
+        add_spec: If provided, create issues from this spec file
         no_auto_stop: If True, don't auto-stop when all issues are complete
         skip_validation: If True, skip Linear state validation on startup
     """
@@ -158,13 +158,13 @@ async def run_autonomous_agent(
         if not spec_path.exists():
             print(f"ERROR: Spec file not found: {spec_path}")
             return
-        print(f"Add Spec Mode - creating 50 issues from {add_spec}")
+        print(f"Add Spec Mode - creating issues from {add_spec}")
         print()
         print("=" * 70)
         print("  The agent will:")
         print(f"  1. Read {add_spec}")
         print("  2. Audit existing Linear issues")
-        print("  3. Create 50 new issues from the spec")
+        print("  3. Create new issues from the spec")
         print("=" * 70)
         print()
         print_progress_summary(project_dir)
@@ -189,7 +189,7 @@ async def run_autonomous_agent(
         print()
         print("=" * 70)
         print("  NOTE: First session takes 10-20+ minutes!")
-        print("  The agent is creating 50 Linear issues and setting up the project.")
+        print("  The agent is creating Linear issues and setting up the project.")
         print("  This may appear to hang - it's working. Watch for [Tool: ...] output.")
         print("=" * 70)
         print()
