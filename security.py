@@ -172,13 +172,22 @@ def validate_pkill_command(command_string: str) -> tuple[bool, str]:
     Returns:
         Tuple of (is_allowed, reason_if_blocked)
     """
-    # Allowed process names for pkill
+    # Allowed process names for pkill (without -f flag)
     allowed_process_names = {
         "node",
         "npm",
         "npx",
         "vite",
         "next",
+    }
+
+    # When using -f flag, require more specific patterns to avoid killing
+    # unrelated processes like Puppeteer MCP server
+    # "pkill -f node" is TOO BROAD - kills everything with "node" in command line
+    dangerous_patterns = {
+        "node",  # Too broad with -f, kills puppeteer, etc.
+        "npm",   # Too broad with -f
+        "npx",   # Too broad with -f
     }
 
     try:
@@ -188,6 +197,9 @@ def validate_pkill_command(command_string: str) -> tuple[bool, str]:
 
     if not tokens:
         return False, "Empty pkill command"
+
+    # Check if -f flag is present
+    has_f_flag = "-f" in tokens
 
     # Separate flags from arguments
     args = []
@@ -201,13 +213,26 @@ def validate_pkill_command(command_string: str) -> tuple[bool, str]:
     # The target is typically the last non-flag argument
     target = args[-1]
 
-    # For -f flag (full command line match), extract the first word as process name
-    # e.g., "pkill -f 'node server.js'" -> target is "node server.js", process is "node"
-    if " " in target:
-        target = target.split()[0]
+    # For -f flag, block overly broad patterns
+    if has_f_flag:
+        # Extract first word for validation
+        first_word = target.split()[0] if " " in target else target
 
-    if target in allowed_process_names:
-        return True, ""
+        if first_word in dangerous_patterns and " " not in target:
+            return False, (
+                f"pkill -f '{target}' is too broad and may kill critical processes. "
+                f"Use a more specific pattern like 'pkill -f \"next dev\"' or 'pkill -f \"vite\"'"
+            )
+
+        # Allow specific patterns like "next dev", "vite", etc.
+        if first_word in allowed_process_names:
+            return True, ""
+
+    else:
+        # Without -f, just check the process name
+        if target in allowed_process_names:
+            return True, ""
+
     return False, f"pkill only allowed for dev processes: {allowed_process_names}"
 
 
