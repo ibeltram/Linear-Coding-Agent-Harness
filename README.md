@@ -7,9 +7,12 @@ A minimal harness demonstrating long-running autonomous coding with the Claude A
 - **Linear Integration**: All work is tracked as Linear issues, not local files
 - **Real-time Visibility**: Watch agent progress directly in your Linear workspace
 - **Session Handoff**: Agents communicate via Linear comments, not text files
-- **Two-Agent Pattern**: Initializer creates Linear project & issues, coding agents implement them
+- **Multi-Agent Pattern**: Initializer, coding, add-features, and add-spec agents
 - **Browser Testing**: Puppeteer MCP for UI verification
 - **Claude Opus 4.5**: Uses Claude's most capable model by default
+- **Auto-Stop on Completion**: Agent automatically stops when all issues are Done
+- **Session Summaries**: Detailed end-of-session reports with timing and issues worked
+- **State Validation**: Validates Linear state on startup to catch configuration issues
 
 ## Prerequisites
 
@@ -60,6 +63,20 @@ For testing with limited iterations:
 python autonomous_agent_demo.py --project-dir ./my_project --max-iterations 3
 ```
 
+To add new features from an updated spec (after initial setup is complete):
+```bash
+# 1. Edit the app_spec.txt in your project directory with new features
+# 2. Run with --add-features flag
+python autonomous_agent_demo.py --project-dir ./my_project --add-features
+```
+
+To add 50 issues from a separate spec file:
+```bash
+# 1. Create a new spec file in your project directory (e.g., COMPLETE_SPEC.txt)
+# 2. Run with --add-spec flag
+python autonomous_agent_demo.py --project-dir ./my_project --add-spec COMPLETE_SPEC.txt
+```
+
 ## How It Works
 
 ### Linear-Centric Workflow
@@ -88,7 +105,7 @@ python autonomous_agent_demo.py --project-dir ./my_project --max-iterations 3
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Two-Agent Pattern
+### Multi-Agent Pattern
 
 1. **Initializer Agent (Session 1):**
    - Reads `app_spec.txt`
@@ -106,6 +123,20 @@ python autonomous_agent_demo.py --project-dir ./my_project --max-iterations 3
    - Adds implementation comment to issue
    - Marks complete (status → Done)
    - Updates META issue with session summary
+
+3. **Add Features Agent (On-demand via `--add-features`):**
+   - Reads updated `app_spec.txt` with new sections
+   - Audits existing Linear issues
+   - Creates new issues ONLY for features not yet tracked
+   - Updates META issue with feature addition summary
+   - Continues with coding if time permits
+
+4. **Add Spec Agent (On-demand via `--add-spec FILE`):**
+   - Reads a specific spec file (e.g., `COMPLETE_SPEC.txt`)
+   - Audits existing Linear issues to avoid duplicates
+   - Creates 50 new issues from the spec file
+   - Updates META issue with spec addition summary
+   - Tracks which spec file generated which batch of issues
 
 ### Session Handoff via Linear
 
@@ -128,6 +159,10 @@ Instead of local text files, agents communicate through:
 | `--project-dir` | Directory for the project | `./autonomous_demo_project` |
 | `--max-iterations` | Max agent iterations | Unlimited |
 | `--model` | Claude model to use | `claude-opus-4-5-20251101` |
+| `--add-features` | Add new features from updated spec | False |
+| `--add-spec FILE` | Create 50 issues from a specific spec file | None |
+| `--no-auto-stop` | Keep running even after all issues are Done | False |
+| `--skip-validation` | Skip Linear state validation on startup | False |
 
 ## Project Structure
 
@@ -143,7 +178,9 @@ linear-agent-harness/
 ├── prompts/
 │   ├── app_spec.txt          # Application specification
 │   ├── initializer_prompt.md # First session prompt (creates Linear issues)
-│   └── coding_prompt.md      # Continuation session prompt (works issues)
+│   ├── coding_prompt.md      # Continuation session prompt (works issues)
+│   ├── add_features_prompt.md # Add features prompt (creates new issues from updated spec)
+│   └── add_spec_prompt.md    # Add spec prompt (creates 50 issues from a specific spec file)
 └── requirements.txt          # Python dependencies
 ```
 
@@ -230,6 +267,25 @@ Open your Linear workspace to see:
 - Real-time status changes (Todo → In Progress → Done)
 - Implementation comments on each issue
 - Session summaries on the META issue
+
+## Session Management
+
+### Session Summaries
+After each session, the harness prints a detailed summary including:
+- Session number and duration
+- Issues worked on (detected from Linear issue IDs in output)
+- Session status (continue/error)
+
+### Auto-Stop on Completion
+By default, the agent automatically stops when all issues in Linear are marked as Done. This prevents the agent from running indefinitely after completing all work. Use `--no-auto-stop` to disable this behavior if you want the agent to keep running.
+
+### Linear State Validation
+On startup (for existing projects), the harness validates that `.linear_project.json` is properly configured:
+- Checks for required fields (team_id, project_id, meta_issue_id)
+- Verifies total_issues is reasonable
+- Warns about potential configuration issues
+
+Use `--skip-validation` to bypass this check if needed.
 
 ## License
 

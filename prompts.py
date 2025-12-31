@@ -28,6 +28,17 @@ def get_coding_prompt() -> str:
     return load_prompt("coding_prompt")
 
 
+def get_add_features_prompt() -> str:
+    """Load the add features prompt for extending existing projects."""
+    return load_prompt("add_features_prompt")
+
+
+def get_add_spec_prompt(spec_file: str) -> str:
+    """Load the add spec prompt and substitute the spec filename."""
+    prompt = load_prompt("add_spec_prompt")
+    return prompt.replace("{SPEC_FILE}", spec_file)
+
+
 def copy_spec_to_project(project_dir: Path) -> None:
     """Copy the app spec file into the project directory for the agent to read."""
     spec_source = PROMPTS_DIR / "app_spec.txt"

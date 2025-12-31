@@ -50,15 +50,23 @@ contains the `project_id` and `team_id` you should use for all Linear queries.
    If any issue is "In Progress", that should be your first priority.
    A previous session may have been interrupted.
 
-### STEP 3: START SERVERS (IF NOT RUNNING)
+### STEP 3: START DEV SERVER
 
-If `init.sh` exists, run it:
+Run init.sh (it handles killing old servers automatically):
 ```bash
 chmod +x init.sh
 ./init.sh
 ```
 
-Otherwise, start servers manually and document the process.
+If init.sh doesn't exist or doesn't kill servers, do it manually first:
+```bash
+pkill -f "next" || true
+pkill -f "vite" || true
+sleep 2
+npm run dev
+```
+
+**IMPORTANT:** Always reuse the project's configured port. If you see "port already in use", kill the old server first - never let it fall back to a different port.
 
 ### STEP 4: VERIFICATION TEST (CRITICAL!)
 

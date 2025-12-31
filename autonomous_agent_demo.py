@@ -47,6 +47,18 @@ Examples:
   # Continue existing project
   python autonomous_agent_demo.py --project-dir ./claude_clone
 
+  # Add new features from updated spec (creates new Linear issues)
+  python autonomous_agent_demo.py --project-dir ./claude_clone --add-features
+
+  # Add 50 issues from a specific spec file
+  python autonomous_agent_demo.py --project-dir ./claude_clone --add-spec COMPLETE_SPEC.txt
+
+  # Keep running even after all issues are Done
+  python autonomous_agent_demo.py --project-dir ./claude_clone --no-auto-stop
+
+  # Skip Linear state validation on startup
+  python autonomous_agent_demo.py --project-dir ./claude_clone --skip-validation
+
 Environment Variables:
   CLAUDE_CODE_OAUTH_TOKEN    Claude Code OAuth token (required)
   LINEAR_API_KEY             Linear API key (required)
@@ -72,6 +84,31 @@ Environment Variables:
         type=str,
         default=DEFAULT_MODEL,
         help=f"Claude model to use (default: {DEFAULT_MODEL})",
+    )
+
+    parser.add_argument(
+        "--add-features",
+        action="store_true",
+        help="Add features mode: create new Linear issues from updated app_spec.txt",
+    )
+
+    parser.add_argument(
+        "--add-spec",
+        type=str,
+        default=None,
+        help="Add issues from a specific spec file (e.g., COMPLETE_SPEC.txt). Creates 50 new issues from this spec.",
+    )
+
+    parser.add_argument(
+        "--no-auto-stop",
+        action="store_true",
+        help="Don't automatically stop when all issues are marked Done",
+    )
+
+    parser.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Skip Linear state validation on startup",
     )
 
     return parser.parse_args()
@@ -118,6 +155,10 @@ def main() -> None:
                 project_dir=project_dir,
                 model=args.model,
                 max_iterations=args.max_iterations,
+                add_features=args.add_features,
+                add_spec=args.add_spec,
+                no_auto_stop=args.no_auto_stop,
+                skip_validation=args.skip_validation,
             )
         )
     except KeyboardInterrupt:

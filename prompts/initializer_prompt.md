@@ -116,9 +116,18 @@ This META issue will be used by all future agents to:
 Create a script called `init.sh` that future agents can use to quickly
 set up and run the development environment. The script should:
 
-1. Install any required dependencies
-2. Start any necessary servers or services
-3. Print helpful information about how to access the running application
+1. **Kill any existing dev servers first** to avoid port conflicts:
+   ```bash
+   pkill -f "next" 2>/dev/null || true
+   pkill -f "vite" 2>/dev/null || true
+   sleep 2
+   ```
+2. Install any required dependencies
+3. Start the dev server on the project's configured port
+4. Print helpful information about how to access the running application
+
+**IMPORTANT:** The script must always kill existing servers before starting.
+This ensures the server always starts on the same port instead of falling back to another.
 
 Base the script on the technology stack specified in `app_spec.txt`.
 
