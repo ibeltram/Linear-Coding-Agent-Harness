@@ -11,6 +11,9 @@ A **truly autonomous** coding agent harness that runs continuously until project
 - **Multi-Agent Pattern**: Initializer, coding, add-features, and add-spec agents
 - **Browser Testing**: Puppeteer MCP for UI verification
 - **Claude Opus 4.5**: Uses Claude's most capable model by default
+- **Auto-Stop on Completion**: Agent automatically stops when all issues are Done
+- **Session Summaries**: Detailed end-of-session reports with timing and issues worked
+- **State Validation**: Validates Linear state on startup to catch configuration issues
 
 ### Autonomy Enhancements (NEW!)
 - **Continuous Mode**: Zero delay between sessions (default) - truly autonomous operation
