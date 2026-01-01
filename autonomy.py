@@ -193,7 +193,8 @@ class AutonomyState:
         if success:
             self.consecutive_successes += 1
             self.consecutive_errors = 0
-            self.degraded_mode = False  # Exit degraded mode on success
+            # Note: degraded_mode is managed separately in agent.py based on
+            # Linear API failure counts, not just session success
         else:
             self.consecutive_errors += 1
             self.consecutive_successes = 0

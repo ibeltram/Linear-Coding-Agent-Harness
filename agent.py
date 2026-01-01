@@ -439,13 +439,24 @@ async def run_autonomous_agent(
             project_dir=project_dir,
         )
 
-        # Extract issue IDs worked on from response text
-        if response:
+        # Record session result
+        session_success = status == "continue"
+
+        # Only extract issue IDs for successful sessions to avoid counting
+        # issue IDs that appear in error messages as "completed"
+        if session_success and response:
             worked_issues = extract_issue_ids_from_response(response)
             session_health.issues_worked = worked_issues
 
-        # Record session result
-        session_success = status == "continue"
+        # Check for Linear API failures during session - enter degraded mode if many failures
+        if session_health.linear_api_failures >= 3:
+            autonomy_state.enter_degraded_mode(
+                f"Multiple Linear API failures during session ({session_health.linear_api_failures} failures)"
+            )
+        # Only exit degraded mode if session succeeded with ZERO Linear failures
+        elif session_success and session_health.linear_api_failures == 0 and autonomy_state.degraded_mode:
+            autonomy_state.exit_degraded_mode()
+
         autonomy_state.record_session_result(session_success, session_health)
         save_autonomy_state(project_dir, autonomy_state)
 
@@ -489,7 +500,7 @@ async def run_autonomous_agent(
 
         # Minimal delay between sessions for stability
         if max_iterations is None or iteration < max_iterations:
-            print("\n─" * 35)
+            print("\n" + "─" * 35)
             print("  Preparing next session...")
             print("─" * 35 + "\n")
 
