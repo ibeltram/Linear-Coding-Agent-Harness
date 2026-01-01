@@ -46,9 +46,16 @@ contains the `project_id` and `team_id` you should use for all Linear queries.
    - Issues with status "Todo" = remaining
    - Issues with status "In Progress" = currently being worked on
 
-3. **Check for in-progress work:**
+3. **Check for in-progress work (STALE ISSUE DETECTION):**
    If any issue is "In Progress", that should be your first priority.
    A previous session may have been interrupted.
+
+   **STALE ISSUE RECOVERY:**
+   If an issue has been "In Progress" for a long time (check the `updatedAt` field):
+   - Read the issue comments for partial work notes
+   - Check git log for any related commits
+   - Either complete the remaining work OR add a detailed comment and continue
+   - This is critical for autonomous operation - never leave issues orphaned
 
 ### STEP 3: START DEV SERVER
 
@@ -308,6 +315,47 @@ than to start another issue and risk running out of context mid-implementation.
 
 **Context is finite.** You cannot monitor your context usage, so err on the side
 of ending sessions early with good handoff notes. The next agent will continue.
+
+---
+
+## AUTONOMOUS RESILIENCE
+
+You are part of a truly autonomous system that should NEVER stop unless all
+work is complete. Here's how to maintain continuous operation:
+
+**If Linear API is slow or unresponsive:**
+1. Retry 2-3 times with brief pauses (sleep 2)
+2. If still failing, focus on code implementation
+3. Track Linear operations to perform later in `.linear_pending.json`:
+   ```json
+   {
+     "pending_updates": [
+       {"issue_id": "XXX-123", "action": "update_status", "status": "Done"},
+       {"issue_id": "XXX-124", "action": "add_comment", "content": "..."}
+     ]
+   }
+   ```
+4. Future sessions will process pending operations
+
+**If Puppeteer/Browser fails:**
+1. Check if dev server is running (`lsof -i :3000`)
+2. Restart dev server if needed
+3. If browser completely unresponsive, the session will auto-restart
+
+**If you encounter repeated failures:**
+1. Document the issue in a git commit message
+2. Update META issue with details about the blocker
+3. Move to a different issue that might be unblocked
+4. The system will pause adaptively if errors continue
+
+**If you're unsure what to work on:**
+1. Always prioritize stale "In Progress" issues
+2. Then highest-priority "Todo" issues
+3. If all issues seem blocked, work on infrastructure improvements
+4. Document discoveries in META issue for future sessions
+
+**Remember:** You're part of a continuous system. Your job is to make progress
+on SOMETHING, even if the primary path is blocked. Adapt and continue.
 
 ---
 
