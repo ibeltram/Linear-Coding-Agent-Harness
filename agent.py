@@ -24,6 +24,7 @@ from progress import (
     check_completion_status,
     print_pending_operations_summary,
     get_pending_operation_count,
+    extract_issue_ids_from_response,
 )
 from prompts import get_initializer_prompt, get_coding_prompt, get_add_features_prompt, get_add_spec_prompt, copy_spec_to_project
 from autonomy import (
@@ -40,9 +41,9 @@ from autonomy import (
 
 
 # Configuration
-# Set to 0 for true autonomy (no delay between sessions)
-# Set higher for ability to manually intervene (e.g., 3 seconds)
-AUTO_CONTINUE_DELAY_SECONDS = 0  # CHANGED: Zero delay for true autonomy
+# Delay between sessions when continuous mode is DISABLED (--no-continuous)
+# This gives time for manual intervention if needed
+NON_CONTINUOUS_DELAY_SECONDS = 5
 
 # Maximum session duration before forcing clean exit (prevents stuck sessions)
 MAX_SESSION_DURATION_SECONDS = 1800  # 30 minutes
@@ -438,6 +439,11 @@ async def run_autonomous_agent(
             project_dir=project_dir,
         )
 
+        # Extract issue IDs worked on from response text
+        if response:
+            worked_issues = extract_issue_ids_from_response(response)
+            session_health.issues_worked = worked_issues
+
         # Record session result
         session_success = status == "continue"
         autonomy_state.record_session_result(session_success, session_health)
@@ -461,9 +467,10 @@ async def run_autonomous_agent(
 
         # Handle status and prepare for next iteration
         if status == "continue":
-            if not continuous_mode and AUTO_CONTINUE_DELAY_SECONDS > 0:
-                print(f"\nAgent will auto-continue in {AUTO_CONTINUE_DELAY_SECONDS}s...")
-                await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)
+            if not continuous_mode:
+                print(f"\nAgent will auto-continue in {NON_CONTINUOUS_DELAY_SECONDS}s...")
+                print("   (Use continuous mode for zero delay)")
+                await asyncio.sleep(NON_CONTINUOUS_DELAY_SECONDS)
             else:
                 print("\n✓ Continuing immediately (continuous mode)...")
             print_progress_summary(project_dir)
