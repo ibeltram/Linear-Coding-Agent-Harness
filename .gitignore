@@ -8,3 +8,9 @@ logs/
 .env
 
 __pycache__
+
+# Machine-specific app spec
+prompts/app_spec.txt
+
+# Claude local settings
+.claude/
