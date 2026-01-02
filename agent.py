@@ -54,6 +54,7 @@ from autonomy import (
 from linear_client import (
     get_issues_for_session,
     format_issues_for_prompt,
+    invalidate_cache,
 )
 
 
@@ -578,6 +579,12 @@ async def run_autonomous_agent(
 
         autonomy_state.record_session_result(session_success, session_health)
         save_autonomy_state(project_dir, autonomy_state)
+
+        # Invalidate issue cache after coding sessions to ensure next session gets fresh data
+        # This prevents the agent from working on already-claimed issues
+        if not used_first_run and not used_add_spec and not used_add_features:
+            if invalidate_cache(project_dir):
+                print("  Cache invalidated - next session will fetch fresh issue data")
 
         # Print updated autonomy status
         print_autonomy_status(autonomy_state)

@@ -116,6 +116,34 @@ def save_cache(project_dir: Path, cache_data: dict) -> None:
         json.dump(cache_data, f, indent=2)
 
 
+def invalidate_cache(project_dir: Path) -> bool:
+    """
+    Invalidate the issue cache so the next session fetches fresh data.
+
+    Call this after any session that may have modified Linear issues.
+
+    Returns:
+        True if cache was invalidated, False if no cache existed
+    """
+    cache_file = project_dir / LINEAR_ISSUE_CACHE_FILE
+
+    if not cache_file.exists():
+        return False
+
+    try:
+        with open(cache_file, "r") as f:
+            cache = json.load(f)
+
+        cache["invalidated_at"] = datetime.utcnow().isoformat() + "Z"
+
+        with open(cache_file, "w") as f:
+            json.dump(cache, f, indent=2)
+
+        return True
+    except (json.JSONDecodeError, IOError):
+        return False
+
+
 def fetch_issues_from_api(api_key: str, project_id: str) -> list[dict]:
     """Fetch all issues from Linear API."""
     if httpx is None:
