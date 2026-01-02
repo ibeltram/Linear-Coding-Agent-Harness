@@ -51,6 +51,10 @@ from autonomy import (
     save_autonomy_state,
     print_autonomy_status,
 )
+from linear_client import (
+    get_issues_for_session,
+    format_issues_for_prompt,
+)
 
 
 # Configuration
@@ -192,19 +196,35 @@ def build_enhanced_prompt(
     base_prompt: str,
     autonomy_state: AutonomyState,
     project_dir: Path,
+    issue_data: Optional[dict] = None,
 ) -> str:
     """
-    Enhance the base prompt with autonomy-aware instructions.
+    Enhance the base prompt with autonomy-aware instructions and issue data.
 
     Args:
         base_prompt: The original prompt (initializer/coding/etc)
         autonomy_state: Current autonomy state
         project_dir: Project directory
+        issue_data: Pre-fetched issue data from Linear (harness-side injection)
 
     Returns:
         Enhanced prompt with additional context and instructions
     """
     enhancements = []
+
+    # CRITICAL: Inject pre-fetched issue data at the top
+    # This eliminates the need for agents to query Linear for issue lists
+    if issue_data:
+        issue_summary = format_issues_for_prompt(issue_data)
+        enhancements.append(f"""
+## 📋 PRE-LOADED LINEAR ISSUES
+
+The harness has pre-fetched your Linear issues to reduce API calls.
+**DO NOT query Linear for issue lists** - use this data instead.
+Only use Linear MCP tools for: updating status, adding comments, reading full descriptions.
+
+{issue_summary}
+""")
 
     # Add context about session history
     if autonomy_state.total_sessions > 0:
@@ -446,8 +466,22 @@ async def run_autonomous_agent(
             else:
                 base_prompt = get_coding_prompt()
 
-            # Enhance prompt with autonomy context
-            enhanced_prompt = build_enhanced_prompt(base_prompt, autonomy_state, project_dir)
+            # Pre-fetch Linear issues for coding sessions (harness-side injection)
+            # This eliminates the need for agents to query Linear for issue lists
+            issue_data = None
+            if not used_first_run and not used_add_spec and not used_add_features:
+                print("  Fetching Linear issues...", end=" ", flush=True)
+                issue_data = get_issues_for_session(project_dir)
+                if issue_data:
+                    from_cache = issue_data.get("_from_cache", False)
+                    counts = issue_data.get("counts", {})
+                    cache_status = "from cache" if from_cache else "fresh from API"
+                    print(f"✓ {counts.get('total', 0)} issues ({cache_status})")
+                else:
+                    print("⚠️  unavailable (agent will query directly)")
+
+            # Enhance prompt with autonomy context and injected issues
+            enhanced_prompt = build_enhanced_prompt(base_prompt, autonomy_state, project_dir, issue_data)
 
             # Run session with async context manager and timeout
             async with client:

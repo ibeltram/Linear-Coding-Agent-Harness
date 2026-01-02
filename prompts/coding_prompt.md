@@ -30,92 +30,31 @@ git log --oneline -20
 Understanding the `app_spec.txt` is critical - it contains the full requirements
 for the application you're building.
 
-### STEP 1.5: CHECK LOCAL ISSUE CACHE
+### STEP 2: USE PRE-LOADED LINEAR ISSUES
 
-Before querying Linear, check if a valid local cache exists to reduce API calls:
+**IMPORTANT:** The harness has already fetched your Linear issues and included them
+in the "PRE-LOADED LINEAR ISSUES" section above. **DO NOT query Linear for issue lists.**
 
-```bash
-# Check if cache file exists
-cat .linear_issue_cache.json 2>/dev/null || echo "NO_CACHE"
-```
+Use the pre-loaded data for:
+- Progress counts (Todo/In Progress/Done)
+- Selecting which issue to work on
+- Finding the META issue
+- Identifying stale "In Progress" issues
 
-**If cache file exists, check if it's valid:**
-1. Parse the `cached_at` timestamp and `ttl_seconds` value
-2. Calculate: Is `cached_at` + `ttl_seconds` > current time?
-3. Check: Is `invalidated_at` null (or missing)?
-4. Verify: Does `project_id` match the one in `.linear_project.json`?
+**Only use Linear MCP tools for:**
+- `mcp__linear__update_issue` - Changing issue status
+- `mcp__linear__create_comment` - Adding comments
+- `mcp__linear__get_issue` - Reading full issue description (if needed)
 
-**If ALL conditions are true (cache is VALID):**
-- Use the cached `issues` array for all issue queries in STEP 2, 4, 5
-- Use cached `counts` object for progress reporting
-- Use cached `meta_issue` to find the META issue
-- **Skip the Linear API calls** in those steps - just use the cached data
-- Proceed directly to STEP 3 (start dev server)
+**STALE ISSUE RECOVERY (Priority!):**
+Check the pre-loaded data for any "In Progress" issues. These should be your first priority
+as a previous session may have been interrupted.
 
-**If cache is INVALID or MISSING:**
-- Proceed to STEP 2 (query Linear as normal)
-- After querying, you MUST write the cache file (see STEP 2)
-
-### STEP 2: CHECK LINEAR STATUS
-
-Query Linear to understand current project state. The `.linear_project.json` file
-contains the `project_id` and `team_id` you should use for all Linear queries.
-
-1. **Find the META issue** for session context:
-   Use `mcp__linear__list_issues` with the project ID from `.linear_project.json`
-   and search for "[META] Project Progress Tracker".
-   Read the issue description and recent comments for context from previous sessions.
-
-2. **Count progress:**
-   Use `mcp__linear__list_issues` with the project ID to get all issues, then count:
-   - Issues with status "Done" = completed
-   - Issues with status "Todo" = remaining
-   - Issues with status "In Progress" = currently being worked on
-
-3. **Check for in-progress work (STALE ISSUE DETECTION):**
-   If any issue is "In Progress", that should be your first priority.
-   A previous session may have been interrupted.
-
-   **STALE ISSUE RECOVERY:**
-   If an issue has been "In Progress" for a long time (check the `updatedAt` field):
-   - Read the issue comments for partial work notes
-   - Check git log for any related commits
-   - Either complete the remaining work OR add a detailed comment and continue
-   - This is critical for autonomous operation - never leave issues orphaned
-
-4. **Write the issue cache** (if you queried Linear):
-   After getting the full issue list, write `.linear_issue_cache.json`:
-   ```json
-   {
-     "cache_version": 1,
-     "project_id": "[from .linear_project.json]",
-     "cached_at": "[current ISO timestamp, e.g., 2025-01-01T12:00:00Z]",
-     "ttl_seconds": 180,
-     "invalidated_at": null,
-     "issues": [
-       {
-         "id": "[issue UUID]",
-         "identifier": "[e.g., QUI-123]",
-         "title": "[issue title]",
-         "status": "[Todo|In Progress|Done]",
-         "priority": [1-4],
-         "description": "[issue description]",
-         "updated_at": "[issue updated timestamp]"
-       }
-     ],
-     "counts": {
-       "todo": [count],
-       "in_progress": [count],
-       "done": [count],
-       "total": [total count]
-     },
-     "meta_issue": {
-       "id": "[META issue UUID]",
-       "identifier": "[META issue identifier]"
-     }
-   }
-   ```
-   This cache will be used by subsequent sessions to reduce API calls.
+If an issue has been "In Progress" for a long time:
+- Read the issue comments with `mcp__linear__get_issue` for partial work notes
+- Check git log for any related commits
+- Either complete the remaining work OR add a detailed comment and continue
+- This is critical for autonomous operation - never leave issues orphaned
 
 ### STEP 3: START DEV SERVER
 
@@ -144,10 +83,8 @@ the Puppeteer MCP server and other critical processes.
 The previous session may have introduced bugs. Before implementing anything
 new, you MUST run verification tests.
 
-Use `mcp__linear__list_issues` with the project ID and status "Done" to find 1-2
-completed features that are core to the app's functionality.
-
-Test these through the browser using Puppeteer:
+From the pre-loaded issue data, identify 1-2 DONE features that are core to the
+app's functionality. Test these through the browser using Puppeteer:
 - Navigate to the feature
 - Verify it still works as expected
 - Take screenshots to confirm
@@ -167,12 +104,12 @@ Test these through the browser using Puppeteer:
 
 ### STEP 5: SELECT NEXT ISSUE TO WORK ON
 
-Use `mcp__linear__list_issues` with the project ID from `.linear_project.json`:
-- Filter by `status`: "Todo"
-- Sort by priority (1=urgent is highest)
-- `limit`: 5
+From the pre-loaded TODO ISSUES list (sorted by priority), select ONE issue to work on.
+- Priority 1 = Urgent (highest)
+- Priority 4 = Low
+- Pick the highest-priority issue you can tackle
 
-Review the highest-priority unstarted issues and select ONE to work on.
+**Note:** If you need the full issue description, use `mcp__linear__get_issue` with the issue ID.
 
 ### STEP 6: CLAIM THE ISSUE
 
@@ -180,14 +117,7 @@ Before starting work, use `mcp__linear__update_issue` to:
 - Set the issue's `status` to "In Progress"
 
 This signals to any other agents (or humans watching) that this issue is being worked on.
-
-**IMPORTANT: Invalidate the cache after claiming:**
-After the `update_issue` call succeeds, update `.linear_issue_cache.json` to invalidate it:
-```bash
-# Read current cache, set invalidated_at, write back
-# Or simply: add "invalidated_at": "[current ISO timestamp]" to the JSON
-```
-This ensures the next session will refresh the issue list from Linear.
+The harness will automatically refresh the issue cache for the next session.
 
 ### STEP 7: IMPLEMENT THE FEATURE
 
@@ -243,10 +173,7 @@ After thorough verification:
 
 2. **Update status** using `mcp__linear__update_issue`:
    - Set `status` to "Done"
-
-3. **Invalidate the cache** after updating status:
-   Update `.linear_issue_cache.json` to set `invalidated_at` to current ISO timestamp.
-   This ensures the next session gets fresh data from Linear.
+   - The harness will automatically refresh the cache for the next session
 
 **ONLY update status to Done AFTER:**
 - All test steps in the issue description pass
