@@ -175,7 +175,7 @@ class AutonomyState:
     consecutive_errors: int = 0
     consecutive_successes: int = 0
     total_sessions: int = 0
-    total_issues_completed: int = 0
+    total_issues_touched: int = 0  # Issues mentioned/worked on (not necessarily completed)
     last_error_category: Optional[ErrorCategory] = None
     degraded_mode: bool = False  # True when operating without Linear
     pause_until: Optional[datetime] = None
@@ -209,8 +209,8 @@ class AutonomyState:
         if len(self.session_history) > self.max_session_history:
             self.session_history = self.session_history[-self.max_session_history:]
 
-        # Completed issues
-        self.total_issues_completed += len(health.issues_worked)
+        # Issues touched this session (mentioned/worked on, not necessarily completed)
+        self.total_issues_touched += len(health.issues_worked)
 
     def should_pause(self) -> tuple[bool, float]:
         """
@@ -252,7 +252,7 @@ class AutonomyState:
         """Get current autonomy status."""
         return {
             "total_sessions": self.total_sessions,
-            "total_issues_completed": self.total_issues_completed,
+            "total_issues_touched": self.total_issues_touched,
             "consecutive_errors": self.consecutive_errors,
             "consecutive_successes": self.consecutive_successes,
             "degraded_mode": self.degraded_mode,
@@ -411,7 +411,7 @@ def save_autonomy_state(project_dir: Path, state: AutonomyState):
         "consecutive_errors": state.consecutive_errors,
         "consecutive_successes": state.consecutive_successes,
         "total_sessions": state.total_sessions,
-        "total_issues_completed": state.total_issues_completed,
+        "total_issues_touched": state.total_issues_touched,
         "degraded_mode": state.degraded_mode,
         "pause_until": state.pause_until.isoformat() if state.pause_until else None,
         "session_history": state.session_history,
@@ -437,7 +437,8 @@ def load_autonomy_state(project_dir: Path) -> AutonomyState:
         state.consecutive_errors = data.get("consecutive_errors", 0)
         state.consecutive_successes = data.get("consecutive_successes", 0)
         state.total_sessions = data.get("total_sessions", 0)
-        state.total_issues_completed = data.get("total_issues_completed", 0)
+        # Support both new name and legacy name for backwards compatibility
+        state.total_issues_touched = data.get("total_issues_touched", data.get("total_issues_completed", 0))
         state.degraded_mode = data.get("degraded_mode", False)
         state.session_history = data.get("session_history", [])
 
@@ -461,7 +462,7 @@ def print_autonomy_status(state: AutonomyState):
     print("  AUTONOMY STATUS DASHBOARD")
     print("=" * 70)
     print(f"  Total Sessions:        {status['total_sessions']}")
-    print(f"  Issues Completed:      {status['total_issues_completed']}")
+    print(f"  Issues Touched:        {status['total_issues_touched']}")
     print(f"  Consecutive Successes: {status['consecutive_successes']}")
     print(f"  Consecutive Errors:    {status['consecutive_errors']}")
     print(f"  Mode:                  {'⚠️ DEGRADED' if status['degraded_mode'] else '✓ Normal'}")

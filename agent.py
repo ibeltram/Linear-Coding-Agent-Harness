@@ -210,7 +210,7 @@ def build_enhanced_prompt(
         enhancements.append(f"""
 ## AUTONOMY CONTEXT
 This is session #{autonomy_state.total_sessions + 1} of the autonomous agent.
-- Total issues completed across all sessions: {autonomy_state.total_issues_completed}
+- Total issues touched across all sessions: {autonomy_state.total_issues_touched}
 - Consecutive successful sessions: {autonomy_state.consecutive_successes}
 - Recent error pattern: {autonomy_state.consecutive_errors} consecutive errors
 """)
