@@ -32,6 +32,7 @@ class ErrorCategory(Enum):
     LINEAR_API = auto()     # Linear-specific errors - may need graceful degradation
     PUPPETEER = auto()      # Browser automation errors - may need browser restart
     VALIDATION = auto()     # Command blocked by security - agent should adapt
+    MCP_BUFFER = auto()     # MCP buffer overflow / large response errors - recoverable
     UNKNOWN = auto()        # Unclassified - use conservative retry
 
 
@@ -64,6 +65,7 @@ RETRY_CONFIGS = {
     ErrorCategory.LINEAR_API: RetryConfig(max_retries=8, initial_delay=5.0, max_delay=120.0),
     ErrorCategory.PUPPETEER: RetryConfig(max_retries=5, initial_delay=3.0),
     ErrorCategory.VALIDATION: RetryConfig(max_retries=0),  # Never retry - agent must adapt
+    ErrorCategory.MCP_BUFFER: RetryConfig(max_retries=3, initial_delay=1.0),  # Quick recovery - tool issue, not systemic
     ErrorCategory.UNKNOWN: RetryConfig(max_retries=5, initial_delay=5.0),
 }
 
@@ -79,6 +81,14 @@ def classify_error(error_text: str) -> ErrorCategory:
         The classified error category
     """
     error_lower = error_text.lower()
+
+    # MCP buffer/JSON errors - check first as these are recoverable tool issues
+    # These occur when MCP tool responses exceed buffer limits (e.g., large screenshots)
+    if any(kw in error_lower for kw in [
+        'buffer size', 'exceeded maximum buffer', 'message reader',
+        'failed to decode json', 'json message exceeded', 'buffer overflow'
+    ]):
+        return ErrorCategory.MCP_BUFFER
 
     # Auth errors
     if any(kw in error_lower for kw in ['unauthorized', '401', 'authentication', 'invalid token', 'expired token']):
@@ -122,6 +132,7 @@ class SessionHealth:
     issues_worked: list = field(default_factory=list)
     linear_api_failures: int = 0
     puppeteer_failures: int = 0
+    mcp_buffer_errors: int = 0  # Track MCP buffer overflow errors
 
     def record_activity(self):
         """Record that activity occurred."""
@@ -138,6 +149,8 @@ class SessionHealth:
             self.puppeteer_failures += 1
         elif category == ErrorCategory.VALIDATION:
             self.blocked_commands += 1
+        elif category == ErrorCategory.MCP_BUFFER:
+            self.mcp_buffer_errors += 1
 
     def is_healthy(self, max_idle_seconds: int = 300) -> bool:
         """Check if the session appears healthy."""
@@ -164,6 +177,7 @@ class SessionHealth:
             "blocked_commands": self.blocked_commands,
             "linear_failures": self.linear_api_failures,
             "puppeteer_failures": self.puppeteer_failures,
+            "mcp_buffer_errors": self.mcp_buffer_errors,
             "issues_worked": self.issues_worked,
             "is_healthy": self.is_healthy(),
         }
