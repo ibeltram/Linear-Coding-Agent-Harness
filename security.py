@@ -28,6 +28,7 @@ ALLOWED_COMMANDS = {
     "pwd",
     # Node.js development
     "npm",
+    "pnpm",
     "node",
     "npx",
     # Version control
@@ -177,17 +178,27 @@ def validate_pkill_command(command_string: str) -> tuple[bool, str]:
         "node",
         "npm",
         "npx",
+        "pnpm",
         "vite",
         "next",
+        "tsx",
+        "turbo",
     }
 
-    # When using -f flag, require more specific patterns to avoid killing
-    # unrelated processes like Puppeteer MCP server
-    # "pkill -f node" is TOO BROAD - kills everything with "node" in command line
-    dangerous_patterns = {
-        "node",  # Too broad with -f, kills puppeteer, etc.
-        "npm",   # Too broad with -f
-        "npx",   # Too broad with -f
+    # When using -f flag, these base patterns are TOO BROAD and need more specificity
+    # "pkill -f node" kills everything with "node" in command line including puppeteer
+    dangerous_if_alone = {"node", "npm", "npx", "pnpm"}
+
+    # Safe patterns that are specific enough for -f flag
+    # These indicate dev server processes that are safe to kill
+    safe_patterns = {
+        "next dev", "next start", "next build",
+        "vite", "vite dev", "vite build",
+        "tsx watch", "tsx",
+        "turbo dev", "turbo run",
+        "npm run dev", "npm run start", "npm run build",
+        "pnpm dev", "pnpm run dev",
+        "npx next", "npx vite", "npx tsx",
     }
 
     try:
@@ -212,19 +223,35 @@ def validate_pkill_command(command_string: str) -> tuple[bool, str]:
 
     # The target is typically the last non-flag argument
     target = args[-1]
+    target_lower = target.lower()
 
-    # For -f flag, block overly broad patterns
+    # For -f flag, validate pattern specificity
     if has_f_flag:
+        # Check if it's a known safe pattern
+        if target_lower in safe_patterns:
+            return True, ""
+
+        # Check for patterns with path components (e.g., "node.*apps/api", "apps/web")
+        # These are specific enough to be safe
+        if "/" in target or "apps/" in target or "packages/" in target:
+            return True, ""
+
+        # Check if it contains a safe keyword that makes it specific
+        safe_keywords = {"dev", "watch", "start", "build", "serve", "server", "api", "web"}
+        if any(kw in target_lower for kw in safe_keywords):
+            return True, ""
+
         # Extract first word for validation
         first_word = target.split()[0] if " " in target else target
 
-        if first_word in dangerous_patterns and " " not in target:
+        # Block overly broad patterns
+        if first_word in dangerous_if_alone and " " not in target and "/" not in target:
             return False, (
                 f"pkill -f '{target}' is too broad and may kill critical processes. "
-                f"Use a more specific pattern like 'pkill -f \"next dev\"' or 'pkill -f \"vite\"'"
+                f"Use a more specific pattern like 'pkill -f \"next dev\"' or 'pkill -f \"tsx watch\"'"
             )
 
-        # Allow specific patterns like "next dev", "vite", etc.
+        # Allow if first word is a known dev tool
         if first_word in allowed_process_names:
             return True, ""
 
