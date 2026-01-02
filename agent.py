@@ -13,6 +13,14 @@ from typing import Optional
 
 from claude_code_sdk import ClaudeSDKClient
 
+# Import MessageParseError to handle unknown message types gracefully
+# The SDK may receive message types it doesn't recognize (e.g., tool_progress)
+try:
+    from claude_code_sdk._errors import MessageParseError
+except ImportError:
+    # Fallback if internal error type not available
+    MessageParseError = Exception  # type: ignore
+
 from client import create_client
 from progress import (
     print_session_header,
@@ -82,53 +90,86 @@ async def run_agent_session(
 
         # Collect response text and show tool use
         response_text = ""
-        async for msg in client.receive_response():
-            msg_type = type(msg).__name__
 
-            # Pet the watchdog on any activity
-            if watchdog:
-                watchdog.pet()
-            health.record_activity()
+        # Use a custom iteration to catch MessageParseError for unknown message types
+        # The SDK may receive message types it doesn't know how to parse (e.g., tool_progress)
+        message_iterator = client.receive_response().__aiter__()
+        while True:
+            try:
+                msg = await message_iterator.__anext__()
+            except StopAsyncIteration:
+                break
+            except MessageParseError as parse_error:
+                # Skip unknown message types (e.g., tool_progress)
+                # These are informational messages that don't affect functionality
+                if "Unknown message type" in str(parse_error):
+                    continue
+                # Re-raise other parse errors
+                raise
+            except Exception as iter_error:
+                # Log but don't fail on iteration errors
+                print(f"   [Warning] Message iteration: {iter_error}", flush=True)
+                continue
 
-            # Handle AssistantMessage (text and tool use)
-            if msg_type == "AssistantMessage" and hasattr(msg, "content"):
-                for block in msg.content:
-                    block_type = type(block).__name__
+            try:
+                msg_type = type(msg).__name__
 
-                    if block_type == "TextBlock" and hasattr(block, "text"):
-                        response_text += block.text
-                        print(block.text, end="", flush=True)
-                    elif block_type == "ToolUseBlock" and hasattr(block, "name"):
-                        print(f"\n[Tool: {block.name}]", flush=True)
-                        if hasattr(block, "input"):
-                            input_str = str(block.input)
-                            if len(input_str) > 200:
-                                print(f"   Input: {input_str[:200]}...", flush=True)
+                # Pet the watchdog on any activity
+                if watchdog:
+                    watchdog.pet()
+                health.record_activity()
+
+                # Skip progress/status messages that don't need processing
+                if msg_type in ("ToolProgress", "tool_progress", "Progress"):
+                    continue
+
+                # Handle AssistantMessage (text and tool use)
+                if msg_type == "AssistantMessage" and hasattr(msg, "content"):
+                    for block in msg.content:
+                        block_type = type(block).__name__
+
+                        if block_type == "TextBlock" and hasattr(block, "text"):
+                            response_text += block.text
+                            print(block.text, end="", flush=True)
+                        elif block_type == "ToolUseBlock" and hasattr(block, "name"):
+                            print(f"\n[Tool: {block.name}]", flush=True)
+                            if hasattr(block, "input"):
+                                input_str = str(block.input)
+                                if len(input_str) > 200:
+                                    print(f"   Input: {input_str[:200]}...", flush=True)
+                                else:
+                                    print(f"   Input: {input_str}", flush=True)
+
+                # Handle UserMessage (tool results)
+                elif msg_type == "UserMessage" and hasattr(msg, "content"):
+                    for block in msg.content:
+                        block_type = type(block).__name__
+
+                        if block_type == "ToolResultBlock":
+                            result_content = getattr(block, "content", "")
+                            is_error = getattr(block, "is_error", False)
+
+                            # Check if command was blocked by security hook
+                            if "blocked" in str(result_content).lower():
+                                print(f"   [BLOCKED] {result_content}", flush=True)
+                                health.record_error(ErrorCategory.VALIDATION)
+                            elif is_error:
+                                # Show errors (truncated)
+                                error_str = str(result_content)[:500]
+                                print(f"   [Error] {error_str}", flush=True)
+                                error_cat = classify_error(error_str)
+                                health.record_error(error_cat)
                             else:
-                                print(f"   Input: {input_str}", flush=True)
+                                # Tool succeeded - just show brief confirmation
+                                print("   [Done]", flush=True)
 
-            # Handle UserMessage (tool results)
-            elif msg_type == "UserMessage" and hasattr(msg, "content"):
-                for block in msg.content:
-                    block_type = type(block).__name__
+                # Silently skip other message types we don't recognize
+                # This makes the harness more resilient to SDK updates
 
-                    if block_type == "ToolResultBlock":
-                        result_content = getattr(block, "content", "")
-                        is_error = getattr(block, "is_error", False)
-
-                        # Check if command was blocked by security hook
-                        if "blocked" in str(result_content).lower():
-                            print(f"   [BLOCKED] {result_content}", flush=True)
-                            health.record_error(ErrorCategory.VALIDATION)
-                        elif is_error:
-                            # Show errors (truncated)
-                            error_str = str(result_content)[:500]
-                            print(f"   [Error] {error_str}", flush=True)
-                            error_cat = classify_error(error_str)
-                            health.record_error(error_cat)
-                        else:
-                            # Tool succeeded - just show brief confirmation
-                            print("   [Done]", flush=True)
+            except Exception as msg_error:
+                # Log but don't fail on individual message processing errors
+                print(f"   [Warning] Message processing: {msg_error}", flush=True)
+                continue
 
         print("\n" + "-" * 70 + "\n")
         return "continue", response_text
