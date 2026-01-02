@@ -103,9 +103,13 @@ async def run_agent_session(
         # Use a custom iteration to catch MessageParseError for unknown message types
         # The SDK may receive message types it doesn't know how to parse (e.g., tool_progress)
         message_iterator = client.receive_response().__aiter__()
+        consecutive_iter_errors = 0
+        max_consecutive_errors = 5  # Allow some errors but not infinite loops
+
         while True:
             try:
                 msg = await message_iterator.__anext__()
+                consecutive_iter_errors = 0  # Reset on successful iteration
             except StopAsyncIteration:
                 break
             except MessageParseError as parse_error:
@@ -116,8 +120,32 @@ async def run_agent_session(
                 # Re-raise other parse errors
                 raise
             except Exception as iter_error:
-                # Log but don't fail on iteration errors
+                error_str = str(iter_error).lower()
+                consecutive_iter_errors += 1
+
+                # Check for MCP buffer overflow errors - these are recoverable
+                # The tool just returned too much data (e.g., large screenshot)
+                is_buffer_error = any(kw in error_str for kw in [
+                    'buffer size', 'exceeded maximum buffer', 'message reader',
+                    'failed to decode json', 'json message exceeded'
+                ])
+
+                if is_buffer_error:
+                    print(f"   [MCP Buffer Error] Tool response too large - skipping and continuing", flush=True)
+                    print(f"   Tip: Use smaller dimensions for screenshots to avoid this", flush=True)
+                    health.record_error(ErrorCategory.MCP_BUFFER)
+                    # Don't increment consecutive errors for buffer issues - they're one-off
+                    consecutive_iter_errors = 0
+                    continue
+
+                # Log other iteration errors
                 print(f"   [Warning] Message iteration: {iter_error}", flush=True)
+
+                # Stop after too many consecutive errors to avoid infinite loops
+                if consecutive_iter_errors >= max_consecutive_errors:
+                    print(f"   [Warning] Too many consecutive iteration errors ({consecutive_iter_errors}), ending session cleanly", flush=True)
+                    break
+
                 continue
 
             try:
@@ -272,6 +300,8 @@ If you encounter errors, adapt your approach:
 - If navigation fails, check if the dev server is running
 - Kill and restart the dev server if needed
 - If browser is unresponsive, the session will restart automatically
+- IMPORTANT: Keep screenshot dimensions reasonable (max 1200x800) to avoid buffer overflows
+- If a screenshot fails with buffer error, retry with smaller dimensions
 
 **Blocked Commands:**
 - If a bash command is blocked, find an alternative approach
@@ -510,6 +540,10 @@ async def run_autonomous_agent(
                 should_exit_after_recording = True
             elif error_cat == ErrorCategory.LINEAR_API:
                 autonomy_state.enter_degraded_mode("Linear API unavailable")
+            elif error_cat == ErrorCategory.MCP_BUFFER:
+                print("\n⚠️  MCP buffer overflow - tool returned too much data")
+                print("   This is recoverable - session will restart with fresh context")
+                print("   Tip: Avoid large screenshots or reduce dimensions")
 
         finally:
             # Stop watchdog
