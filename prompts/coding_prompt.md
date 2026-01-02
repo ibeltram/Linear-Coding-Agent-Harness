@@ -30,6 +30,32 @@ git log --oneline -20
 Understanding the `app_spec.txt` is critical - it contains the full requirements
 for the application you're building.
 
+### STEP 1.5: CHECK LOCAL ISSUE CACHE
+
+Before querying Linear, check if a valid local cache exists to reduce API calls:
+
+```bash
+# Check if cache file exists
+cat .linear_issue_cache.json 2>/dev/null || echo "NO_CACHE"
+```
+
+**If cache file exists, check if it's valid:**
+1. Parse the `cached_at` timestamp and `ttl_seconds` value
+2. Calculate: Is `cached_at` + `ttl_seconds` > current time?
+3. Check: Is `invalidated_at` null (or missing)?
+4. Verify: Does `project_id` match the one in `.linear_project.json`?
+
+**If ALL conditions are true (cache is VALID):**
+- Use the cached `issues` array for all issue queries in STEP 2, 4, 5
+- Use cached `counts` object for progress reporting
+- Use cached `meta_issue` to find the META issue
+- **Skip the Linear API calls** in those steps - just use the cached data
+- Proceed directly to STEP 3 (start dev server)
+
+**If cache is INVALID or MISSING:**
+- Proceed to STEP 2 (query Linear as normal)
+- After querying, you MUST write the cache file (see STEP 2)
+
 ### STEP 2: CHECK LINEAR STATUS
 
 Query Linear to understand current project state. The `.linear_project.json` file
@@ -56,6 +82,40 @@ contains the `project_id` and `team_id` you should use for all Linear queries.
    - Check git log for any related commits
    - Either complete the remaining work OR add a detailed comment and continue
    - This is critical for autonomous operation - never leave issues orphaned
+
+4. **Write the issue cache** (if you queried Linear):
+   After getting the full issue list, write `.linear_issue_cache.json`:
+   ```json
+   {
+     "cache_version": 1,
+     "project_id": "[from .linear_project.json]",
+     "cached_at": "[current ISO timestamp, e.g., 2025-01-01T12:00:00Z]",
+     "ttl_seconds": 180,
+     "invalidated_at": null,
+     "issues": [
+       {
+         "id": "[issue UUID]",
+         "identifier": "[e.g., QUI-123]",
+         "title": "[issue title]",
+         "status": "[Todo|In Progress|Done]",
+         "priority": [1-4],
+         "description": "[issue description]",
+         "updated_at": "[issue updated timestamp]"
+       }
+     ],
+     "counts": {
+       "todo": [count],
+       "in_progress": [count],
+       "done": [count],
+       "total": [total count]
+     },
+     "meta_issue": {
+       "id": "[META issue UUID]",
+       "identifier": "[META issue identifier]"
+     }
+   }
+   ```
+   This cache will be used by subsequent sessions to reduce API calls.
 
 ### STEP 3: START DEV SERVER
 
@@ -121,6 +181,14 @@ Before starting work, use `mcp__linear__update_issue` to:
 
 This signals to any other agents (or humans watching) that this issue is being worked on.
 
+**IMPORTANT: Invalidate the cache after claiming:**
+After the `update_issue` call succeeds, update `.linear_issue_cache.json` to invalidate it:
+```bash
+# Read current cache, set invalidated_at, write back
+# Or simply: add "invalidated_at": "[current ISO timestamp]" to the JSON
+```
+This ensures the next session will refresh the issue list from Linear.
+
 ### STEP 7: IMPLEMENT THE FEATURE
 
 Read the issue description for test steps and implement accordingly:
@@ -175,6 +243,10 @@ After thorough verification:
 
 2. **Update status** using `mcp__linear__update_issue`:
    - Set `status` to "Done"
+
+3. **Invalidate the cache** after updating status:
+   Update `.linear_issue_cache.json` to set `invalidated_at` to current ISO timestamp.
+   This ensures the next session gets fresh data from Linear.
 
 **ONLY update status to Done AFTER:**
 - All test steps in the issue description pass

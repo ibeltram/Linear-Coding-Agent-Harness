@@ -37,6 +37,7 @@ from progress import (
     print_pending_operations_summary,
     get_pending_operation_count,
     extract_issue_ids_from_response,
+    format_cache_status,
 )
 from prompts import get_initializer_prompt, get_coding_prompt, get_add_features_prompt, get_add_spec_prompt, copy_spec_to_project
 from autonomy import (
@@ -378,6 +379,7 @@ async def run_autonomous_agent(
     else:
         print("Continuing existing project (Linear initialized)")
         print_progress_summary(project_dir)
+        print(f"  {format_cache_status(project_dir)}")
 
     # Validate Linear state on startup (unless skipped or first run)
     if not is_first_run and not skip_validation:
@@ -549,6 +551,7 @@ async def run_autonomous_agent(
                 print("\n✓ Continuing immediately (continuous mode)...")
             print_progress_summary(project_dir)
             print_pending_operations_summary(project_dir)
+            print(f"  {format_cache_status(project_dir)}")
 
         elif status == "timeout":
             print("\nSession timed out - restarting with fresh context...")
@@ -574,6 +577,7 @@ async def run_autonomous_agent(
     print(f"\nProject directory: {project_dir}")
     print_progress_summary(project_dir)
     print_autonomy_status(autonomy_state)
+    print(f"  {format_cache_status(project_dir)}")
 
     # Print instructions for running the generated application
     print("\n" + "-" * 70)

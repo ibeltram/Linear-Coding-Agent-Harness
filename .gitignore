@@ -1,6 +1,9 @@
 # Agent-generated output directories
 generations/
 
+# Linear issue cache (regenerated per session)
+.linear_issue_cache.json
+
 # Log files
 logs/
 

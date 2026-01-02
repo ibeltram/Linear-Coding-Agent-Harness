@@ -35,5 +35,9 @@ PRIORITY_LOW = 4
 # Local marker file to track Linear project initialization
 LINEAR_PROJECT_MARKER = ".linear_project.json"
 
+# Issue cache configuration
+LINEAR_ISSUE_CACHE_FILE = ".linear_issue_cache.json"
+DEFAULT_CACHE_TTL_SECONDS = 180  # 3 minutes
+
 # Meta issue title for project tracking and session handoff
 META_ISSUE_TITLE = "[META] Project Progress Tracker"

@@ -15,7 +15,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from linear_config import LINEAR_PROJECT_MARKER
+from linear_config import (
+    LINEAR_PROJECT_MARKER,
+    LINEAR_ISSUE_CACHE_FILE,
+    DEFAULT_CACHE_TTL_SECONDS,
+)
 
 # File for tracking pending Linear operations during degraded mode
 LINEAR_PENDING_FILE = ".linear_pending.json"
@@ -409,3 +413,159 @@ def print_pending_operations_summary(project_dir: Path) -> None:
             print(f"     - {op['action']} on {op['issue_id']}")
         if count > 3:
             print(f"     ... and {count - 3} more")
+
+
+# =============================================================================
+# Issue Cache Functions
+# =============================================================================
+# These functions provide harness-side utilities for the local issue cache.
+# The cache itself is written/read by the agent via file operations in prompts.
+# =============================================================================
+
+
+def get_cache_file_path(project_dir: Path) -> Path:
+    """
+    Get the path to the issue cache file.
+
+    Args:
+        project_dir: Project directory
+
+    Returns:
+        Path to .linear_issue_cache.json
+    """
+    return project_dir / LINEAR_ISSUE_CACHE_FILE
+
+
+def load_issue_cache(project_dir: Path) -> dict | None:
+    """
+    Load the issue cache from disk.
+
+    Args:
+        project_dir: Project directory
+
+    Returns:
+        Cache dict or None if file doesn't exist or is malformed
+    """
+    cache_file = get_cache_file_path(project_dir)
+
+    if not cache_file.exists():
+        return None
+
+    try:
+        with open(cache_file, "r") as f:
+            cache = json.load(f)
+
+        # Validate required fields
+        required_fields = ["cache_version", "project_id", "cached_at", "issues"]
+        if not all(key in cache for key in required_fields):
+            return None
+
+        return cache
+    except (json.JSONDecodeError, IOError, KeyError):
+        return None
+
+
+def get_cache_age_seconds(project_dir: Path) -> float | None:
+    """
+    Get the age of the cache in seconds.
+
+    Args:
+        project_dir: Project directory
+
+    Returns:
+        Age in seconds or None if cache doesn't exist or has invalid timestamp
+    """
+    cache = load_issue_cache(project_dir)
+    if not cache:
+        return None
+
+    try:
+        cached_at_str = cache.get("cached_at")
+        if not cached_at_str:
+            return None
+
+        # Handle both formats: with and without 'Z' suffix
+        cached_at_str = cached_at_str.replace("Z", "+00:00")
+        if "+" not in cached_at_str and "-" not in cached_at_str[10:]:
+            # No timezone info, assume UTC
+            cached_at = datetime.fromisoformat(cached_at_str)
+        else:
+            cached_at = datetime.fromisoformat(cached_at_str)
+
+        # Use UTC-naive comparison
+        if cached_at.tzinfo:
+            cached_at = cached_at.replace(tzinfo=None)
+
+        age = (datetime.now() - cached_at).total_seconds()
+        return max(0, age)  # Ensure non-negative
+    except (ValueError, TypeError):
+        return None
+
+
+def is_cache_valid(
+    project_dir: Path, max_age_seconds: int | None = None
+) -> tuple[bool, str]:
+    """
+    Check if the issue cache exists and is still valid.
+
+    A cache is valid if:
+    1. The cache file exists and is parseable
+    2. The cache has not been explicitly invalidated (invalidated_at is null)
+    3. The cache is not older than the TTL
+    4. The project_id matches (if .linear_project.json exists)
+
+    Args:
+        project_dir: Project directory
+        max_age_seconds: Override TTL (uses cache's ttl_seconds or default if None)
+
+    Returns:
+        (is_valid, reason) where reason explains why cache is invalid
+    """
+    cache = load_issue_cache(project_dir)
+
+    if not cache:
+        return False, "Cache missing or corrupted"
+
+    # Check explicit invalidation
+    if cache.get("invalidated_at") is not None:
+        return False, "Cache explicitly invalidated"
+
+    # Determine TTL
+    ttl = max_age_seconds or cache.get("ttl_seconds") or DEFAULT_CACHE_TTL_SECONDS
+
+    # Check age
+    age = get_cache_age_seconds(project_dir)
+    if age is None:
+        return False, "Cannot determine cache age"
+
+    if age > ttl:
+        return False, f"Cache expired ({int(age)}s old, TTL is {ttl}s)"
+
+    # Check project_id matches (if we have project state)
+    project_state = load_linear_project_state(project_dir)
+    if project_state:
+        cache_project_id = cache.get("project_id")
+        actual_project_id = project_state.get("project_id")
+        if cache_project_id and actual_project_id:
+            if cache_project_id != actual_project_id:
+                return False, "Cache is for different project"
+
+    return True, f"Cache valid ({int(age)}s old)"
+
+
+def format_cache_status(project_dir: Path) -> str:
+    """
+    Get a human-readable cache status string.
+
+    Args:
+        project_dir: Project directory
+
+    Returns:
+        String like "Cache valid (45s old)" or "Cache invalid (expired)"
+    """
+    is_valid, reason = is_cache_valid(project_dir)
+
+    if is_valid:
+        return f"Cache: {reason}"
+    else:
+        return f"Cache: invalid - {reason}"

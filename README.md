@@ -360,6 +360,41 @@ The autonomy state (`.autonomy_state.json`) is saved after each session and rest
 - Degraded mode status
 - Recent session history (last 10 sessions)
 
+### Issue Cache
+
+To reduce Linear API calls (especially when running multiple agent instances), the harness supports local issue caching:
+
+**How it works:**
+- After querying Linear, the agent writes all issues to `.linear_issue_cache.json`
+- Subsequent sessions check the cache before querying Linear
+- If the cache is fresh (< 3 minutes old), the agent uses cached data
+- After updating issue status, the cache is invalidated
+
+**Cache file structure:**
+```json
+{
+  "cache_version": 1,
+  "project_id": "uuid",
+  "cached_at": "2025-01-01T12:00:00Z",
+  "ttl_seconds": 180,
+  "invalidated_at": null,
+  "issues": [...],
+  "counts": {"todo": 50, "in_progress": 1, "done": 65, "total": 116},
+  "meta_issue": {"id": "uuid", "identifier": "QUI-55"}
+}
+```
+
+**Benefits:**
+- Reduces Linear API calls from ~8 to ~4-5 per session
+- Helps avoid rate limiting when running multiple instances
+- Cache status is displayed in harness output
+
+**Cache invalidation:**
+- Automatically invalidated after 3 minutes (TTL)
+- Invalidated after any `update_issue` call (status changes)
+- Deleted if corrupted or for a different project
+- Agent falls back to querying Linear if cache is invalid
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.

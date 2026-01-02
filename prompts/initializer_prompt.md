@@ -174,6 +174,44 @@ Create a file called `.linear_project.json` with the following information:
 
 This file tells future sessions that Linear has been set up.
 
+### NEXT TASK: Initialize Issue Cache
+
+After creating all issues, query the full issue list and create `.linear_issue_cache.json`:
+
+```json
+{
+  "cache_version": 1,
+  "project_id": "[project_id from above]",
+  "cached_at": "[current ISO timestamp]",
+  "ttl_seconds": 180,
+  "invalidated_at": null,
+  "issues": [
+    {
+      "id": "[issue UUID]",
+      "identifier": "[e.g., QUI-123]",
+      "title": "[issue title]",
+      "status": "Todo",
+      "priority": [1-4],
+      "description": "[issue description]",
+      "updated_at": "[timestamp]"
+    }
+  ],
+  "counts": {
+    "todo": [total issues created],
+    "in_progress": 0,
+    "done": 0,
+    "total": [total issues created]
+  },
+  "meta_issue": {
+    "id": "[META issue UUID]",
+    "identifier": "[META issue identifier]"
+  }
+}
+```
+
+This pre-populates the cache so the first coding session can skip querying Linear,
+reducing API calls significantly.
+
 ### OPTIONAL: Start Implementation
 
 If you have time remaining in this session, you may begin implementing
