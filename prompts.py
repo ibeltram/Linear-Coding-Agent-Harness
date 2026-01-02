@@ -5,8 +5,47 @@ Prompt Loading Utilities
 Functions for loading prompt templates from the prompts directory.
 """
 
+import json
+import re
 import shutil
 from pathlib import Path
+
+
+# Default port if detection fails
+DEFAULT_DEV_PORT = 3000
+
+
+def detect_dev_port(project_dir: Path) -> int:
+    """
+    Detect the development server port from project configuration.
+
+    Checks in order:
+    1. package.json "dev" script for -p or --port flag
+    2. Falls back to DEFAULT_DEV_PORT (3000)
+
+    Args:
+        project_dir: Path to the project directory
+
+    Returns:
+        The detected port number
+    """
+    # Try package.json first
+    package_json = project_dir / "package.json"
+    if package_json.exists():
+        try:
+            with open(package_json) as f:
+                pkg = json.load(f)
+
+            dev_script = pkg.get("scripts", {}).get("dev", "")
+
+            # Match patterns like: -p 3008, --port 3008, -p=3008, --port=3008
+            port_match = re.search(r'(?:-p|--port)[=\s]+(\d+)', dev_script)
+            if port_match:
+                return int(port_match.group(1))
+        except (json.JSONDecodeError, ValueError, IOError):
+            pass
+
+    return DEFAULT_DEV_PORT
 
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"

@@ -337,7 +337,7 @@ work is complete. Here's how to maintain continuous operation:
 4. Future sessions will process pending operations
 
 **If Puppeteer/Browser fails:**
-1. Check if dev server is running (`lsof -i :3000`)
+1. Check if dev server is running (see SELF-HEALING BEHAVIORS section for the correct port)
 2. Restart dev server if needed
 3. If browser completely unresponsive, the session will auto-restart
 

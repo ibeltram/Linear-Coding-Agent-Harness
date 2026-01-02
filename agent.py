@@ -39,7 +39,7 @@ from progress import (
     extract_issue_ids_from_response,
     format_cache_status,
 )
-from prompts import get_initializer_prompt, get_coding_prompt, get_add_features_prompt, get_add_spec_prompt, copy_spec_to_project
+from prompts import get_initializer_prompt, get_coding_prompt, get_add_features_prompt, get_add_spec_prompt, copy_spec_to_project, detect_dev_port
 from autonomy import (
     AutonomyState,
     SessionHealth,
@@ -286,8 +286,11 @@ Linear API may be unavailable. Adapt your workflow:
 4. Create a .linear_pending.json file to track operations that need to be retried
 """)
 
+    # Detect the dev port for this project
+    dev_port = detect_dev_port(project_dir)
+
     # Add self-healing instructions
-    enhancements.append("""
+    enhancements.append(f"""
 ## SELF-HEALING BEHAVIORS
 
 If you encounter errors, adapt your approach:
@@ -303,6 +306,7 @@ If you encounter errors, adapt your approach:
 - If browser is unresponsive, the session will restart automatically
 - IMPORTANT: Keep screenshot dimensions reasonable (max 1200x800) to avoid buffer overflows
 - If a screenshot fails with buffer error, retry with smaller dimensions
+- The dev server runs on port {dev_port} - navigate to http://localhost:{dev_port}
 
 **Blocked Commands:**
 - If a bash command is blocked, find an alternative approach
@@ -315,9 +319,10 @@ If you encounter errors, adapt your approach:
 - It's better to end early than to get cut off mid-operation
 
 **Port Conflicts:**
-- Use `pkill -f "next dev"` or `pkill -f "vite"` to kill dev servers
-- NEVER use `pkill -f node` (kills critical processes)
-- If port still in use, check with `lsof -i :3000`
+- On Unix/Mac: Use `pkill -f "next dev"` or `pkill -f "vite"` to kill dev servers
+- On Windows: Use `taskkill /F /IM node.exe` to kill Node processes
+- NEVER use `pkill -f node` (kills critical processes including Puppeteer)
+- To check port usage: Unix: `lsof -i :{dev_port}` | Windows: `netstat -ano | findstr :{dev_port}`
 """)
 
     # Combine
@@ -655,6 +660,7 @@ async def run_autonomous_agent(
     print(f"  {format_cache_status(project_dir)}")
 
     # Print instructions for running the generated application
+    final_port = detect_dev_port(project_dir)
     print("\n" + "-" * 70)
     print("  TO RUN THE GENERATED APPLICATION:")
     print("-" * 70)
@@ -662,7 +668,7 @@ async def run_autonomous_agent(
     print("  ./init.sh           # Run the setup script")
     print("  # Or manually:")
     print("  npm install && npm run dev")
-    print("\n  Then open http://localhost:3000 (or check init.sh for the URL)")
+    print(f"\n  Then open http://localhost:{final_port}")
     print("-" * 70)
 
     print("\nDone!")

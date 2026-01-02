@@ -33,11 +33,15 @@ ALLOWED_COMMANDS = {
     "npx",
     # Version control
     "git",
-    # Process management
+    # Process management (Unix)
     "ps",
     "lsof",
     "sleep",
     "pkill",  # For killing dev servers; validated separately
+    # Process management (Windows)
+    "taskkill",  # Windows equivalent of pkill; validated separately
+    "netstat",  # For checking port usage on Windows
+    "findstr",  # Windows equivalent of grep
     # Shell builtins (needed for || true patterns and output)
     "true",
     "false",
@@ -47,7 +51,7 @@ ALLOWED_COMMANDS = {
 }
 
 # Commands that need additional validation even when in the allowlist
-COMMANDS_NEEDING_EXTRA_VALIDATION = {"pkill", "chmod", "init.sh"}
+COMMANDS_NEEDING_EXTRA_VALIDATION = {"pkill", "taskkill", "chmod", "init.sh"}
 
 
 def split_command_segments(command_string: str) -> list[str]:
@@ -263,6 +267,61 @@ def validate_pkill_command(command_string: str) -> tuple[bool, str]:
     return False, f"pkill only allowed for dev processes: {allowed_process_names}"
 
 
+def validate_taskkill_command(command_string: str) -> tuple[bool, str]:
+    """
+    Validate taskkill commands (Windows) - only allow killing dev-related processes.
+
+    Returns:
+        Tuple of (is_allowed, reason_if_blocked)
+    """
+    # Allowed image names for taskkill /IM
+    allowed_image_names = {
+        "node.exe",
+        "npm.exe",
+        "npx.exe",
+    }
+
+    try:
+        tokens = shlex.split(command_string)
+    except ValueError:
+        return False, "Could not parse taskkill command"
+
+    if not tokens:
+        return False, "Empty taskkill command"
+
+    # taskkill typically uses /F (force) and /IM (image name) or /PID
+    # We only allow /IM with specific process names
+    has_im_flag = False
+    image_name = None
+
+    i = 0
+    while i < len(tokens):
+        token = tokens[i].upper()
+
+        if token == "/IM" and i + 1 < len(tokens):
+            has_im_flag = True
+            image_name = tokens[i + 1].lower()
+            i += 2
+            continue
+
+        # Also handle /IM:name format
+        if token.startswith("/IM:"):
+            has_im_flag = True
+            image_name = tokens[i][4:].lower()
+            i += 1
+            continue
+
+        i += 1
+
+    if not has_im_flag or not image_name:
+        return False, "taskkill only allowed with /IM flag and image name"
+
+    if image_name not in allowed_image_names:
+        return False, f"taskkill only allowed for dev processes: {allowed_image_names}"
+
+    return True, ""
+
+
 def validate_chmod_command(command_string: str) -> tuple[bool, str]:
     """
     Validate chmod commands - only allow making files executable with +x.
@@ -402,6 +461,10 @@ async def bash_security_hook(input_data, tool_use_id=None, context=None):
 
             if cmd == "pkill":
                 allowed, reason = validate_pkill_command(cmd_segment)
+                if not allowed:
+                    return {"decision": "block", "reason": reason}
+            elif cmd == "taskkill":
+                allowed, reason = validate_taskkill_command(cmd_segment)
                 if not allowed:
                     return {"decision": "block", "reason": reason}
             elif cmd == "chmod":
