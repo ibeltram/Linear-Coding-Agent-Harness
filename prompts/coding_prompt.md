@@ -58,15 +58,17 @@ chmod +x init.sh
 ./init.sh
 ```
 
-If init.sh doesn't exist or doesn't kill servers, do it manually first:
+If init.sh doesn't exist, start the server manually:
 ```bash
-pkill -f "next" || true
-pkill -f "vite" || true
-sleep 2
 npm run dev
 ```
 
-**IMPORTANT:** Always reuse the project's configured port. If you see "port already in use", kill the old server first - never let it fall back to a different port.
+**If you see "port already in use":** The previous dev server is still running.
+Use `pkill -f "next dev"` or `pkill -f "vite"` to kill ONLY the dev server process,
+then try `npm run dev` again.
+
+**WARNING:** Never use `pkill -f node` - this kills ALL node processes including
+the Puppeteer MCP server and other critical processes.
 
 ### STEP 4: VERIFICATION TEST (CRITICAL!)
 

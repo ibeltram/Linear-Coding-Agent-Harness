@@ -126,10 +126,12 @@ set up and run the development environment. The script should:
 
 1. **Kill any existing dev servers first** to avoid port conflicts:
    ```bash
-   pkill -f "next" 2>/dev/null || true
+   # Kill ONLY the dev server, not all node processes
+   pkill -f "next dev" 2>/dev/null || true
    pkill -f "vite" 2>/dev/null || true
    sleep 2
    ```
+   **WARNING:** Never use `pkill -f node` - this kills Puppeteer and other critical processes.
 2. Install any required dependencies
 3. Start the dev server on the project's configured port
 4. Print helpful information about how to access the running application
