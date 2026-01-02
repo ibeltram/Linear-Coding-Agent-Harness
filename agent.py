@@ -392,6 +392,7 @@ async def run_autonomous_agent(
 
     # Main loop
     iteration = 0
+    should_exit_after_recording = False  # Flag to exit loop after recording session
 
     while True:
         iteration += 1
@@ -416,6 +417,12 @@ async def run_autonomous_agent(
         session_health = SessionHealth()
         session_start = datetime.now()
 
+        # Track which special prompt mode we're using this iteration
+        # These are only cleared AFTER a successful session
+        used_add_spec = add_spec
+        used_add_features = add_features
+        used_first_run = is_first_run
+
         # Start watchdog
         await watchdog.start()
 
@@ -424,15 +431,12 @@ async def run_autonomous_agent(
             client = create_client(project_dir, model)
 
             # Choose base prompt based on session type
-            if add_spec:
-                base_prompt = get_add_spec_prompt(add_spec)
-                add_spec = None  # Only use add-spec prompt for first iteration
-            elif add_features:
+            if used_add_spec:
+                base_prompt = get_add_spec_prompt(used_add_spec)
+            elif used_add_features:
                 base_prompt = get_add_features_prompt()
-                add_features = False  # Only use add-features prompt for first iteration
-            elif is_first_run:
+            elif used_first_run:
                 base_prompt = get_initializer_prompt()
-                is_first_run = False  # Only use initializer once
             else:
                 base_prompt = get_coding_prompt()
 
@@ -459,11 +463,11 @@ async def run_autonomous_agent(
             error_cat = classify_error(response)
             session_health.record_error(error_cat)
 
-            # Check for specific error patterns
+            # Check for specific error patterns - defer break until after recording
             if error_cat == ErrorCategory.AUTH:
                 print("\n🚫 Authentication error - cannot continue")
                 print("   Please check your CLAUDE_CODE_OAUTH_TOKEN and LINEAR_API_KEY")
-                break
+                should_exit_after_recording = True
             elif error_cat == ErrorCategory.LINEAR_API:
                 autonomy_state.enter_degraded_mode("Linear API unavailable")
 
@@ -503,6 +507,20 @@ async def run_autonomous_agent(
 
         # Print updated autonomy status
         print_autonomy_status(autonomy_state)
+
+        # Clear special prompt flags ONLY after successful session
+        # This ensures failed sessions retry with the same special prompt
+        if session_success:
+            if used_add_spec:
+                add_spec = None
+            if used_add_features:
+                add_features = False
+            if used_first_run:
+                is_first_run = False
+
+        # Exit if we hit a fatal error (e.g., auth) - but only after recording
+        if should_exit_after_recording:
+            break
 
         # Check for completion (auto-stop when all issues done)
         if not no_auto_stop and status == "continue":
