@@ -3,12 +3,24 @@
 Autonomous Coding Agent Demo
 ============================
 
-A minimal harness demonstrating long-running autonomous coding with Claude.
-This script implements the two-agent pattern (initializer + coding agent) and
-incorporates all the strategies from the long-running agents guide.
+A truly autonomous coding agent harness that runs continuously until completion.
+
+Features:
+- CONTINUOUS MODE: Zero delay between sessions for maximum throughput
+- INTELLIGENT RETRY: Exponential backoff with error classification
+- HEALTH MONITORING: Watchdog timers detect and recover from hung sessions
+- ADAPTIVE BEHAVIOR: Graceful degradation when services are unavailable
+- SELF-HEALING: Agents receive instructions to recover from errors
+- STATUS DASHBOARD: Real-time visibility into autonomy state
 
 Example Usage:
+    # Truly autonomous (continuous mode - DEFAULT)
     python autonomous_agent_demo.py --project-dir ./claude_clone_demo
+
+    # With manual intervention delays
+    python autonomous_agent_demo.py --project-dir ./claude_clone_demo --no-continuous
+
+    # Limited iterations for testing
     python autonomous_agent_demo.py --project-dir ./claude_clone_demo --max-iterations 5
 """
 
@@ -35,8 +47,11 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Start fresh project
+  # Start fresh project (TRULY AUTONOMOUS - continuous mode is default)
   python autonomous_agent_demo.py --project-dir ./claude_clone
+
+  # Run with delays between sessions (for manual intervention)
+  python autonomous_agent_demo.py --project-dir ./claude_clone --no-continuous
 
   # Use a specific model
   python autonomous_agent_demo.py --project-dir ./claude_clone --model claude-sonnet-4-5-20250929
@@ -58,6 +73,14 @@ Examples:
 
   # Skip Linear state validation on startup
   python autonomous_agent_demo.py --project-dir ./claude_clone --skip-validation
+
+Autonomy Features:
+  - Continuous mode: Zero delay between sessions (default)
+  - Intelligent retry: Exponential backoff based on error type
+  - Watchdog timers: Detect and recover from hung sessions
+  - Health tracking: Monitor error rates and session health
+  - Graceful degradation: Continue working when Linear is unavailable
+  - Self-healing prompts: Agents receive recovery instructions
 
 Environment Variables:
   CLAUDE_CODE_OAUTH_TOKEN    Claude Code OAuth token (required)
@@ -111,6 +134,12 @@ Environment Variables:
         help="Skip Linear state validation on startup",
     )
 
+    parser.add_argument(
+        "--no-continuous",
+        action="store_true",
+        help="Disable continuous mode (adds delays between sessions for manual intervention)",
+    )
+
     return parser.parse_args()
 
 
@@ -159,11 +188,13 @@ def main() -> None:
                 add_spec=args.add_spec,
                 no_auto_stop=args.no_auto_stop,
                 skip_validation=args.skip_validation,
+                continuous_mode=not args.no_continuous,  # Continuous by default
             )
         )
     except KeyboardInterrupt:
         print("\n\nInterrupted by user")
         print("To resume, run the same command again")
+        print("Autonomy state has been saved and will be restored on restart.")
     except Exception as e:
         print(f"\nFatal error: {e}")
         raise

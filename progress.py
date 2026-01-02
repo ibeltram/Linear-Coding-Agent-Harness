@@ -4,6 +4,9 @@ Progress Tracking Utilities
 
 Functions for tracking and displaying progress of the autonomous coding agent.
 Progress is tracked via Linear issues, with local state cached in .linear_project.json.
+
+Also includes pending operation tracking for graceful degradation when Linear
+is temporarily unavailable.
 """
 
 import json
@@ -13,6 +16,9 @@ from pathlib import Path
 from typing import Optional
 
 from linear_config import LINEAR_PROJECT_MARKER
+
+# File for tracking pending Linear operations during degraded mode
+LINEAR_PENDING_FILE = ".linear_pending.json"
 
 
 def load_linear_project_state(project_dir: Path) -> dict | None:
@@ -299,3 +305,107 @@ def print_validation_result(is_valid: bool, warnings: list[str]) -> None:
         print("  Linear state validation: WARNINGS FOUND")
         for warning in warnings:
             print(f"    - {warning}")
+
+
+# ============================================================================
+# PENDING LINEAR OPERATIONS (for graceful degradation)
+# ============================================================================
+
+def load_pending_operations(project_dir: Path) -> dict:
+    """
+    Load pending Linear operations from file.
+
+    Returns:
+        Dict with pending_updates list and metadata
+    """
+    pending_file = project_dir / LINEAR_PENDING_FILE
+
+    if not pending_file.exists():
+        return {"pending_updates": [], "created_at": None}
+
+    try:
+        with open(pending_file, "r") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {"pending_updates": [], "created_at": None}
+
+
+def save_pending_operations(project_dir: Path, pending: dict) -> None:
+    """Save pending Linear operations to file."""
+    pending_file = project_dir / LINEAR_PENDING_FILE
+
+    pending["updated_at"] = datetime.now().isoformat()
+    if not pending.get("created_at"):
+        pending["created_at"] = pending["updated_at"]
+
+    with open(pending_file, "w") as f:
+        json.dump(pending, f, indent=2)
+
+
+def add_pending_operation(
+    project_dir: Path,
+    issue_id: str,
+    action: str,
+    **kwargs
+) -> None:
+    """
+    Add a pending Linear operation to be retried later.
+
+    Args:
+        project_dir: Project directory
+        issue_id: Linear issue ID
+        action: Operation type (update_status, add_comment, etc.)
+        **kwargs: Additional parameters for the operation
+    """
+    pending = load_pending_operations(project_dir)
+
+    operation = {
+        "issue_id": issue_id,
+        "action": action,
+        "added_at": datetime.now().isoformat(),
+        **kwargs
+    }
+
+    pending["pending_updates"].append(operation)
+    save_pending_operations(project_dir, pending)
+
+
+def get_pending_operation_count(project_dir: Path) -> int:
+    """Get the number of pending Linear operations."""
+    pending = load_pending_operations(project_dir)
+    return len(pending.get("pending_updates", []))
+
+
+def clear_pending_operations(project_dir: Path) -> int:
+    """
+    Clear all pending operations (call after successfully processing them).
+
+    Returns:
+        Number of operations that were cleared
+    """
+    pending = load_pending_operations(project_dir)
+    count = len(pending.get("pending_updates", []))
+
+    # Keep an archive of processed operations for debugging
+    if count > 0:
+        pending["last_cleared"] = datetime.now().isoformat()
+        pending["last_cleared_count"] = count
+        pending["pending_updates"] = []
+        save_pending_operations(project_dir, pending)
+
+    return count
+
+
+def print_pending_operations_summary(project_dir: Path) -> None:
+    """Print a summary of pending Linear operations."""
+    pending = load_pending_operations(project_dir)
+    count = len(pending.get("pending_updates", []))
+
+    if count > 0:
+        print(f"\n  ⚠️  Pending Linear operations: {count}")
+        print("     These will be processed when Linear is available.")
+        # Show first few operations
+        for op in pending["pending_updates"][:3]:
+            print(f"     - {op['action']} on {op['issue_id']}")
+        if count > 3:
+            print(f"     ... and {count - 3} more")
