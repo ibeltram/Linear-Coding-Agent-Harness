@@ -18,8 +18,12 @@ from claude_code_sdk import ClaudeSDKClient
 try:
     from claude_code_sdk._errors import MessageParseError
 except ImportError:
-    # Fallback if internal error type not available
-    MessageParseError = Exception  # type: ignore
+    # Create a placeholder class that will never match any real exception
+    # This ensures the except MessageParseError block is effectively disabled
+    # when the SDK doesn't export this error type, allowing Exception handler to work
+    class MessageParseError(Exception):  # type: ignore[no-redef]
+        """Placeholder - never raised when SDK doesn't export MessageParseError."""
+        pass
 
 from client import create_client
 from progress import (

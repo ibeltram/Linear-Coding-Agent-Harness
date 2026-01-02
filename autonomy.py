@@ -235,6 +235,9 @@ class AutonomyState:
 
     def enter_degraded_mode(self, reason: str):
         """Enter degraded mode (e.g., when Linear is unavailable)."""
+        if self.degraded_mode:
+            # Already in degraded mode, don't spam repeated messages
+            return
         self.degraded_mode = True
         print(f"\n⚠️  ENTERING DEGRADED MODE: {reason}")
         print("   Agent will continue with limited functionality.")
